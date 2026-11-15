@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multicourt · PiQueueBall</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://buzwzmrrtcduownczmdc.supabase.co">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0" as="script" crossorigin>
+  <link rel="icon" href="assets/logo.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="offline.js" defer></script>
+  <script src="page-transitions.js" defer></script>
+  <script src="app-state.js" defer></script>
+  <script src="supabase-config.js" defer></script>
+  <script src="supabase-client.js" defer></script>
+  <script src="auth-guard.js" defer></script>
+  <script src="capacitor-auth.js" defer></script>
+  <script src="online-sync.js" defer></script>
+  <script src="auth-ui.js" defer></script>
+  <script src="multicourt.js" defer></script>
+</head>
+<body>
+  <main class="screen queue-screen multicourt-screen">
+    <header class="hero queue-hero">
+      <span class="circle c1"></span><span class="circle c2"></span>
+      <small>PiQueueBall</small>
+      <h1>Multicourt</h1>
+      <p>One shared queue, with the next waiting players assigned automatically to available courts.</p>
+    </header>
+    <div class="account-bar"><span id="account-email"></span><button id="sign-out" type="button">Sign out</button></div>
+
+    <section class="queue-panel" id="join-venue-panel" hidden>
+      <div class="section-heading">
+        <div><p class="eyebrow">SHARED VENUE</p><h2>Join a court venue</h2></div>
+      </div>
+      <form class="court-admin-form" id="join-venue-form">
+        <label for="venue-join-code">Venue join code</label>
+        <div class="court-admin-controls">
+          <input id="venue-join-code" maxlength="8" autocomplete="one-time-code" required>
+          <button class="btn dark" type="submit">Join venue</button>
+        </div>
+      </form>
+      <p class="queue-status" id="join-venue-status" role="status" aria-live="polite"></p>
+      <a class="btn secondary-button court-admin-link" href="home.html">Back to Single-Court</a>
+    </section>
+
+    <div id="venue-dashboard" hidden>
+      <section class="queue-panel multicourt-intro">
+        <div class="section-heading">
+          <div><p class="eyebrow">MULTICOURT MODE</p><h2 id="venue-title">Venue</h2></div>
+          <span class="match-format" id="venue-member-role"></span>
+        </div>
+        <p class="match-message">Courts use the shared queue in order. Players who finish a match return to the end of the queue.</p>
+        <p class="queue-status venue-player-status" id="player-queue-status" role="status" aria-live="polite"></p>
+        <button class="btn dark start-button" id="join-shared-queue" type="button">Join shared queue</button>
+        <button class="btn secondary-button court-admin-link" id="back-to-single-court" type="button">
+          Leave Multicourt and use Single-Court
+        </button>
+        <div class="multicourt-admin-options" id="multicourt-mode-settings" hidden>
+          <label for="multicourt-operating-mode">Court Operating Mode</label>
+          <select id="multicourt-operating-mode" class="court-mode-select">
+            <option value="multicourt">Multicourt Mode</option>
+            <option value="single">Single-Court Mode (Existing System)</option>
+          </select>
+            <a id="venue-invite-link" class="court-admin-help" hidden></a>
+          </div>
+        <p class="queue-status" id="multicourt-status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="queue-panel" id="court-config-panel" hidden>
+        <div class="section-heading">
+          <div><p class="eyebrow">ADMINISTRATION</p><h2>Manage courts</h2></div>
+        </div>
+        <form class="court-admin-form" id="court-form">
+          <input id="court-edit-id" type="hidden">
+          <label for="court-name">Court name</label>
+          <div class="court-config-controls">
+            <input id="court-name" maxlength="40" required placeholder="Court name">
+            <select id="court-format" aria-label="Court match format">
+              <option value="doubles">Doubles</option>
+              <option value="singles">Singles</option>
+            </select>
+            <label class="court-enabled-option"><input id="court-enabled" type="checkbox" checked> Active</label>
+            <button class="btn dark" type="submit" id="save-court-button">Add court</button>
+            <button class="btn secondary-button" type="button" id="cancel-court-edit" hidden>Cancel</button>
+          </div>
+        </form>
+        <ul class="court-config-list" id="court-config-list"></ul>
+      </section>
+
+      <section class="queue-panel" id="shared-roster-panel">
+        <div class="section-heading">
+          <div><p class="eyebrow">CENTRAL QUEUE</p><h2>Players waiting</h2></div>
+          <span class="roster-count" id="venue-roster-count">0 players</span>
+        </div>
+        <div class="venue-queue-tools" id="venue-queue-tools" hidden>
+          <button class="btn secondary-button" id="venue-new-session" type="button">New Session</button>
+        </div>
+        <ul class="player-list venue-player-list" id="venue-player-list" aria-label="Shared venue queue"></ul>
+        <p class="empty-roster" id="venue-empty-roster" hidden>No players in the shared queue yet.</p>
+      </section>
+
+      <section class="queue-panel" aria-labelledby="courts-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">LIVE COURTS</p><h2 id="courts-heading">Court status</h2></div>
+        </div>
+        <div class="court-card-grid" id="court-card-grid"></div>
+      </section>
+    </div>
+
+    <nav class="nav" aria-label="Main">
+      <a class="active" href="multicourt.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Courts</a>
+      <a href="totals.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11h4v9m4 0V4h4v16m4 0v-6h4v6M2 20h20"/></svg>Totals</a>
+      <a href="results.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H5V3zm8 1v4h4m-10 4h8m-8 4h5"/></svg>Results</a>
+      <a href="profiles.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profiles</a>
+      <a href="friends.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7-7.5a4 4 0 0 1 0 7.8M20 15a4 4 0 0 1 2 3.5V21"/></svg>Friends</a>
+    </nav>
+  </main>
+</body>
+</html>

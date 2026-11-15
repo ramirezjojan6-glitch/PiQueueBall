@@ -921,6 +921,52 @@ body{
   *,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}
 }
 
+.court-admin-panel[hidden],.court-admin-form[hidden],#venue-dashboard[hidden],#join-venue-panel[hidden]{display:none}
+.court-admin-panel:not([hidden])+#queue{margin-top:0}
+.queue-home-screen>#queue[hidden]{display:none}
+.court-admin-form{display:grid;gap:7px;margin-top:12px}
+.court-admin-form>label,.multicourt-admin-options>label{color:var(--green-900);font-size:.78rem;font-weight:600}
+.court-admin-controls,.court-config-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.court-admin-controls input,.court-config-controls input,.court-config-controls select,.court-mode-select{
+  width:100%;min-width:0;min-height:44px;padding:9px 12px;border:1px solid #dce8dc;
+  border-radius:12px;background:#f8fbf8;color:var(--ink);font:inherit;font-size:.8rem
+}
+.court-admin-controls .btn,.court-config-controls .btn{min-height:44px}
+.court-admin-help{margin-top:7px;color:var(--muted);font-size:.75rem;line-height:1.5;overflow-wrap:anywhere}
+.court-admin-link{display:inline-flex;justify-content:center;min-height:44px;align-items:center;margin-top:8px}
+.court-mode-select{margin-top:8px}
+.multicourt-screen #venue-dashboard{display:grid;gap:13px}
+.multicourt-screen #venue-dashboard[hidden]{display:none}
+.court-config-controls{grid-template-columns:minmax(8rem,1.3fr) minmax(7rem,.8fr) auto auto}
+.court-enabled-option{display:flex;align-items:center;gap:6px;color:var(--green-900);font-size:.75rem}
+.court-enabled-option input{width:18px;height:18px;accent-color:var(--green-700)}
+.court-config-list{display:grid;gap:7px;margin-top:12px;list-style:none}
+.court-config-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid #e6eee7;border-radius:12px;color:var(--ink);font-size:.78rem}
+.court-config-list .btn{min-height:40px}
+.venue-queue-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}
+.venue-queue-tools .fairness-note{flex:1 1 100%;text-align:left}
+.venue-player-item{min-width:0}
+.venue-player-item .player-info{flex:1;min-width:0}
+.venue-player-item .player-name{white-space:normal;overflow-wrap:anywhere}
+.venue-player-item .player-games{flex:none}
+.court-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr));gap:10px}
+.court-live-card{display:grid;align-content:start;gap:11px;min-width:0;padding:14px;border:1px solid #e2ece4;border-radius:16px;background:#f9fcf9}
+.court-live-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.court-live-heading h3{min-width:0;color:var(--green-900);font-size:1rem}
+.court-live-status{min-height:2.8em;color:var(--ink);font-size:.82rem;line-height:1.5;overflow-wrap:anywhere}
+.court-live-card .start-button{margin:0}
+.multicourt-admin-options{display:grid;gap:4px;margin-top:12px}
+#venue-invite-link{display:inline-block}
+.multicourt-screen .queue-panel{margin-top:0}
+
+@media(max-width:599px){
+  .court-admin-controls,.court-config-controls{grid-template-columns:minmax(0,1fr)}
+  .court-config-list li{align-items:flex-start}
+  .court-config-list .btn{flex:none}
+  .venue-player-item .player-games{white-space:normal}
+  .court-card-grid{grid-template-columns:minmax(0,1fr)}
+}
+
 .upcoming-queue{display:grid;gap:9px;margin-top:14px;padding-top:13px;border-top:1px solid #dceade}
 .upcoming-queue-heading{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:5px 12px}
 .upcoming-queue-heading h3{color:var(--green-900);font-size:clamp(.95rem,2vw,1.15rem);font-weight:600}

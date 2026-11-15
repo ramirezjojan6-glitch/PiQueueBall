@@ -1,7 +1,7 @@
 # PiQueueBall
 Open the folder in VS Code and use Live Server on `index.html` (or open that file directly in a browser).
 
-Pages: `index.html` (sign-in entry) -> `signup.html` or `login.html` -> `profile-setup.html` for new accounts -> `home.html` (queue). Starting a match opens `score.html`; player totals are on `totals.html`, saved match and queue history are on `results.html`, your account profile is on `profiles.html`, and player discovery and friend requests are on `friends.html`.
+Pages: `index.html` (sign-in entry) -> `signup.html` or `login.html` -> `profile-setup.html` for new accounts -> `home.html` (the existing single-court queue). Starting a match opens `score.html`; player totals are on `totals.html`, saved match and queue history are on `results.html`, your account profile is on `profiles.html`, player discovery and friend requests are on `friends.html`, and optional shared multicourt operations are on `multicourt.html`.
 
 ## Project layout
 
@@ -9,10 +9,11 @@ The web app stays at the project root so pages, scripts, styles, and the service
 
 | Location | Contents |
 | --- | --- |
-| Root `*.html` | App pages: sign-in, signup, profile setup, queue, scoring, totals, results, profiles, and friends |
+| Root `*.html` | App pages: sign-in, signup, profile setup, queue, scoring, totals, results, profiles, friends, and multicourt |
 | Root `*.js` | Browser logic, authentication, Supabase integration, offline support, and page behavior |
 | `styles.css` | Shared responsive app styling |
 | `supabase-setup.sql` | Database tables, security policies, and Supabase functions |
+| `multicourt-setup.sql` | Optional shared-venue schema and multicourt RPC functions |
 | `assets/` | App images and logos |
 | `scripts/` | Asset-copying and Android build helpers |
 | `tests/` | Node.js regression tests |
@@ -30,6 +31,17 @@ New accounts go through a three-step profile setup for display name, profile pho
 2. `supabase-config.js` contains the project's URL and client-safe publishable key. Only the publishable key belongs in this browser app; never put a `service_role` or secret key here.
 3. In **Authentication → URL Configuration**, set the Site URL to your development origin (for VS Code Live Server, commonly `http://127.0.0.1:5500`) and add the origin and `/login.html` callback as redirect URLs. For Android, also add `com.example.piqueueball://auth/callback` as a redirect URL. Add your production domain and its `/login.html` callback before deploying.
 4. Open `index.html` through VS Code Live Server (or another HTTP server), create an account, and confirm the email if Supabase requests it. Browser confirmation returns to `login.html`; Android confirmation opens the app through its `com.example.piqueueball://auth/callback` deep link. The app ID and callback scheme must match if you change the app ID. A resend button is available after signup. If the email is not delivered, check Supabase's SMTP and email-template settings. Sessions persist and valid returning sessions go directly to the queue.
+
+## Optional multicourt mode
+
+Single-Court Mode remains the existing queue and match flow. Each player can choose Single-Court or Multicourt on `home.html`; the Single-Court queue is hidden while Multicourt is selected and is unchanged when Single-Court is selected.
+
+1. Run `supabase-setup.sql` first if it has not already been applied, then run the latest [`multicourt-setup.sql`](./multicourt-setup.sql) in the Supabase SQL Editor. Rerun it after app updates to install the latest RPC functions. It adds venue, court, and shared-queue tables without changing the existing local Single-Court data.
+2. Any signed-in player who is not already a member of a venue can select **Multicourt** on `home.html` and create a venue. The creator becomes its venue administrator. They can share the generated invite link; players sign in and open that link to join the venue, then choose Multicourt and join the shared queue from `home.html`.
+3. Each player chooses whether to join the venue's Multicourt queue. Queue entries are opt-in and FIFO. Available courts automatically receive the next eligible players: two for Singles or four for Doubles. Players currently on a court cannot be selected again. When a match ends, its players return to the end of the queue. The dashboard shows queue positions, waiting times, available and occupied courts, assigned courts, teams, scores, and match links. Each court has its own scoreboard.
+4. A player can leave the shared queue and choose Single-Court at any time before being assigned to a match. Switching is blocked during an active match. Venue administrators configure courts and control whether Multicourt is available for that venue; this venue-wide setting does not force any player into Multicourt. Venue configuration, shared-queue records, and cloud match history are retained when Multicourt is disabled.
+
+Multicourt operations require a signed-in account and an internet connection. Players do not select a court or get added by an administrator; they join and leave the shared queue themselves. Single-Court and Multicourt queues stay separate, and completed court matches use the existing scoring and match-history pages.
 
 Queue management, match generation, score tracking, queue and match history, and player totals are saved in this browser and work offline. Choose **Continue offline** on the welcome page to use those features without signing in; offline matches are stored on this device until they can sync online. Matches completed while signed in are associated with that account and sync automatically when online. Matches recorded without an account (including older local matches) require review and an explicit choice on `results.html` before they are assigned to a signed-in account; matches already assigned to another account are never synced by the current account. Supabase deduplicates results already synced for the same account. A match involving another registered account can sync only if that player is still an accepted friend. Match and profile data are readable by all authenticated users under the current row-level security policies. **Delete** on `totals.html` removes that player's local history and matches saved by your account; **Delete** on `results.html` removes a single match and its queue snapshot. Shared match records created by other accounts are not deleted. Online deletion requires rerunning `supabase-setup.sql` to install the account-restricted deletion functions. On `results.html`, **Export device data** downloads the locally stored queue, profile, and match data as JSON; it does not import data or export cloud-only history. When served from localhost or HTTPS, the app caches its files for offline use after the first visit. Supabase sign-in, registration, profiles, friends, and shared match history require a network connection.
 

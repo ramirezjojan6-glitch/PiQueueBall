@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "piqueueball-offline-v23";
+const CACHE_NAME = "piqueueball-offline-v25";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const APP_FILES = [
   "./signup.html",
   "./profile-setup.html",
   "./home.html",
+  "./multicourt.html",
   "./score.html",
   "./totals.html",
   "./results.html",
@@ -23,6 +24,8 @@ const APP_FILES = [
   "./capacitor-auth.js",
   "./online-sync.js",
   "./auth-ui.js",
+  "./court-mode.js",
+  "./multicourt.js",
   "./history-utils.js",
   "./auth-pages.js",
   "./auth-validation.js",

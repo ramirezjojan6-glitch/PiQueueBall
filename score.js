@@ -2,6 +2,8 @@
   "use strict";
 
   const STORAGE_KEY = "piqueueball.queue.v1";
+  const courtMatchId = new URLSearchParams(window.location.search).get("courtMatch");
+  const stateStorageKey = courtMatchId ? "piqueueball.multicourt.match." + courtMatchId : STORAGE_KEY;
   const noCurrentMatch = document.getElementById("no-current-match");
   const scoreMatch = document.getElementById("score-match");
   const scoreTeams = document.getElementById("score-teams");
@@ -36,7 +38,7 @@
   function readState() {
     let value;
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(stateStorageKey);
       if (!saved) return null;
       value = JSON.parse(saved);
     } catch (error) {
@@ -66,7 +68,7 @@
 
   function saveState() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(stateStorageKey, JSON.stringify(state));
       return true;
     } catch (error) {
       status.textContent = "Unable to save this match in the browser. Check its storage settings.";
@@ -75,6 +77,8 @@
   }
 
   let state = readState();
+  let courtMatchRevision = null;
+  let courtScoreSaving = false;
 
   function validPickleballState(game, match) {
     return game && game.mode === match.mode
@@ -155,7 +159,8 @@
     noCurrentMatch.hidden = true;
     scoreMatch.hidden = false;
     const isDoubles = state.currentMatch.mode === "doubles";
-    scoreFormat.textContent = isDoubles ? "Doubles" : "Singles";
+    scoreFormat.textContent = (state.currentMatch.courtName ? state.currentMatch.courtName + " · " : "")
+      + (isDoubles ? "Doubles" : "Singles");
     scoreTeams.replaceChildren();
 
     state.currentMatch.teams.forEach((team, index) => {
@@ -245,8 +250,9 @@
     pickleballTracker.hidden = false;
   }
 
-  function recordRally(won) {
-    if (!state || !state.currentMatch || !state.currentMatch.pickleball) return;
+  async function recordRally(won) {
+    if (!state || !state.currentMatch || !state.currentMatch.pickleball
+      || (courtMatchId && courtScoreSaving)) return;
     const previousGame = state.currentMatch.pickleball;
     const previousScores = state.currentMatch.scores;
     const nextGame = won
@@ -261,13 +267,40 @@
       renderScores();
       return;
     }
+    if (courtMatchId) {
+      courtScoreSaving = true;
+      servingTeamWonButton.disabled = true;
+      servingTeamLostButton.disabled = true;
+      completeButton.disabled = true;
+      try {
+        const { data, error } = await window.piqueueSupabase.rpc("save_court_match_score", {
+          p_match_id: courtMatchId,
+          p_expected_revision: courtMatchRevision,
+          p_game_state: nextGame
+        });
+        if (error) throw error;
+        courtMatchRevision = data;
+      } catch (error) {
+        state.currentMatch.pickleball = previousGame;
+        state.currentMatch.scores = previousScores;
+        saveState();
+        status.textContent = error.message || "Unable to save the court score.";
+        renderScores();
+        return;
+      } finally {
+        courtScoreSaving = false;
+        servingTeamWonButton.disabled = false;
+        servingTeamLostButton.disabled = false;
+        updateScoreMessage();
+      }
+    }
     renderScores();
   }
 
   function updateScoreMessage() {
     const scores = state.currentMatch.scores;
     const valid = scores.length === 2 && scores.every(validScore);
-    completeButton.disabled = !valid || scores[0] === scores[1];
+    completeButton.disabled = courtScoreSaving || !valid || scores[0] === scores[1];
     if (!valid) {
       scoreMessage.textContent = "Record each rally to update the score.";
     } else if (scores[0] === scores[1]) {
@@ -280,7 +313,7 @@
   }
 
   completeButton.addEventListener("click", async () => {
-    if (!state) return;
+    if (!state || courtScoreSaving) return;
     const scores = state.currentMatch.scores;
     if (!scores.every(validScore) || scores[0] === scores[1]) {
       updateScoreMessage();
@@ -290,6 +323,8 @@
     const teams = teamSnapshots();
     const winner = scores[0] > scores[1] ? 0 : 1;
     completeButton.disabled = true;
+    servingTeamWonButton.disabled = true;
+    servingTeamLostButton.disabled = true;
     let syncOwnerId;
     try {
       const session = await window.piqueueAuth.ready;
@@ -297,7 +332,25 @@
     } catch (error) {
       status.textContent = error.message || "Unable to verify the signed-in account. The match was not completed.";
       completeButton.disabled = false;
+      servingTeamWonButton.disabled = false;
+      servingTeamLostButton.disabled = false;
       return;
+    }
+    if (courtMatchId) {
+      try {
+        const { error } = await window.piqueueSupabase.rpc("finish_court_match", {
+          p_match_id: courtMatchId,
+          p_expected_revision: courtMatchRevision,
+          p_game_state: state.currentMatch.pickleball
+        });
+        if (error) throw error;
+      } catch (error) {
+        status.textContent = error.message || "Unable to finish this court match.";
+        completeButton.disabled = false;
+        servingTeamWonButton.disabled = false;
+        servingTeamLostButton.disabled = false;
+        return;
+      }
     }
     const stateSnapshot = JSON.stringify(state);
     const resultId = newUuid();
@@ -314,7 +367,7 @@
       scores: scores.slice(),
       winner,
       syncOwnerId,
-      syncStatus: "pending"
+      syncStatus: courtMatchId ? "synced" : "pending"
     });
     if (queueSnapshot) {
       queueSnapshot.completedAt = completedAt;
@@ -335,6 +388,11 @@
     if (activeIds.length > 0 && activeIds.every((id) => state.played.includes(id))) state.played = [];
 
     if (!saveState()) {
+      if (courtMatchId) {
+        status.textContent = "Match finished online, but the local display could not be updated.";
+        window.location.href = "multicourt.html";
+        return;
+      }
       Object.keys(state).forEach((key) => delete state[key]);
       Object.assign(state, JSON.parse(stateSnapshot));
       renderScores();
@@ -346,6 +404,10 @@
       sessionStorage.setItem("piqueueball.sync-status.v1",
         "Match saved on this device. It will sync when you are online and signed in.");
     }
+    if (courtMatchId) {
+      window.location.href = "multicourt.html";
+      return;
+    }
     if (window.piqueueSyncLocalMatches && navigator.onLine) {
       window.piqueueSyncLocalMatches();
     }
@@ -355,5 +417,60 @@
   servingTeamWonButton.addEventListener("click", () => recordRally(true));
   servingTeamLostButton.addEventListener("click", () => recordRally(false));
 
-  if (state) renderScores();
+  async function loadCourtMatch() {
+    if (!courtMatchId) return;
+    try {
+      const { data: match, error } = await window.piqueueSupabase.rpc("get_court_match", {
+        p_match_id: courtMatchId
+      });
+      if (error) throw error;
+      if (!match || match.status !== "active") throw new Error("This court match is no longer active.");
+      const teams = match.teams.map((team) => team.map((player) => player.id));
+      const queuePlayers = match.queueSnapshot.map((player) => ({
+        id: player.id,
+        onlineId: player.userId,
+        name: player.name,
+        avatarDataUrl: player.avatarDataUrl || ""
+      }));
+      const queueSnapshot = {
+        id: match.id,
+        startedAt: match.startedAt,
+        mode: match.mode,
+        players: match.queueSnapshot,
+        teams: match.teams
+      };
+      state = {
+        players: queuePlayers,
+        played: [],
+        results: [],
+        queueHistory: [queueSnapshot],
+        currentMatch: {
+          mode: match.mode,
+          teams,
+          names: match.teams,
+          scores: match.gameState.scores.slice(),
+          pickleball: match.gameState,
+          queueId: match.id,
+          courtName: match.courtName,
+          venueId: match.venueId
+        }
+      };
+      if (!validPickleballState(state.currentMatch.pickleball, state.currentMatch)) {
+        throw new Error("The court match has invalid scoring data.");
+      }
+      courtMatchRevision = match.revision;
+      renderScores();
+    } catch (error) {
+      state = null;
+      noCurrentMatch.hidden = false;
+      scoreMatch.hidden = true;
+      status.textContent = error.message || "Unable to load this court match.";
+    }
+  }
+
+  if (courtMatchId) {
+    loadCourtMatch();
+  } else if (state) {
+    renderScores();
+  }
 }());

@@ -21,6 +21,7 @@
   <script src="capacitor-auth.js" defer></script>
   <script src="online-sync.js" defer></script>
   <script src="auth-ui.js" defer></script>
+  <script src="court-mode.js" defer></script>
   <script src="logic.js" defer></script>
   <script src="queue-view-utils.js" defer></script>
   <script src="queue.js" defer></script>
@@ -34,6 +35,46 @@
       <p>Build a fair match rotation with your players.</p>
     </header>
     <div class="account-bar"><span id="account-email"></span><button id="sign-out" type="button">Sign out</button></div>
+
+    <section class="queue-panel court-admin-panel" id="court-admin-panel" hidden aria-labelledby="court-admin-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">CHOOSE YOUR QUEUE</p>
+          <h2 id="court-admin-title">How do you want to play?</h2>
+        </div>
+      </div>
+      <fieldset class="mode-picker player-mode-picker" id="player-mode-picker">
+        <legend>Queue mode</legend>
+        <label class="mode-option">
+          <input type="radio" name="player-queue-mode" value="single" checked>
+          <span><b>Single-Court</b><small>Use the existing queue</small></span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="player-queue-mode" value="multicourt">
+          <span><b>Multicourt</b><small>Join your venue's shared queue</small></span>
+        </label>
+      </fieldset>
+      <p class="queue-status" id="player-mode-status" role="status" aria-live="polite"></p>
+      <button class="btn dark start-button" id="player-mode-action" type="button" hidden>Join Multicourt Queue</button>
+      <form class="court-admin-form" id="create-venue-form" hidden>
+        <label for="venue-name">Venue name</label>
+        <div class="court-admin-controls">
+          <input id="venue-name" maxlength="80" required placeholder="e.g. Community Pickleball Club">
+          <button class="btn dark" type="submit">Create venue</button>
+        </div>
+      </form>
+      <div id="venue-mode-settings" hidden>
+        <label for="court-operating-mode">Enable Multicourt for this venue</label>
+        <select id="court-operating-mode" class="court-mode-select">
+          <option value="single">Single-Court Mode (Existing System)</option>
+          <option value="multicourt">Multicourt Mode</option>
+        </select>
+        <p class="court-admin-help" id="court-venue-name"></p>
+        <a class="btn secondary-button court-admin-link" id="manage-courts-link" href="multicourt.html">Manage courts and queue</a>
+        <p class="court-admin-help" id="court-join-link"></p>
+      </div>
+      <p class="queue-status" id="court-admin-status" role="status" aria-live="polite"></p>
+    </section>
 
     <section class="queue-panel" id="queue">
       <div class="section-heading">

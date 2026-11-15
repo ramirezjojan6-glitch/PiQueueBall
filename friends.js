@@ -2,9 +2,10 @@
   "use strict";
 
   const STORAGE_KEY = "piqueueball.queue.v1";
-  const client = window.piqueueSupabase;
   const status = document.getElementById("friends-status");
   const form = document.getElementById("friend-form");
+  const searchResults = document.getElementById("search-results");
+  const emptySearchResults = document.getElementById("empty-search-results");
   let signedInUser;
 
   function showError(error) {
@@ -45,7 +46,7 @@
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       const state = saved ? JSON.parse(saved) : {
-        players: [], played: [], partners: [], ownPartner: null, mode: "singles",
+        players: [], played: [], partners: [], mode: "singles",
         stayTogether: false, currentMatch: null, results: [], queueHistory: [], profiles: {}
       };
       if (!Array.isArray(state.players)) throw new Error("The saved queue data is invalid.");
@@ -72,23 +73,11 @@
 
   async function loadFriends(user) {
     status.textContent = "Loading friends…";
-    const { data: relations, error } = await client.from("friendships")
-      .select("id, requester_id, addressee_id, status, created_at")
+    const { data: relations, error } = await window.piqueueSupabase.from("friendships")
+      .select("id, requester_id, addressee_id, status, created_at, requester:profiles!friendships_requester_id_fkey(id, display_name, avatar_data_url), addressee:profiles!friendships_addressee_id_fkey(id, display_name, avatar_data_url)")
       .or("requester_id.eq." + user.id + ",addressee_id.eq." + user.id)
       .order("created_at", { ascending: false });
     if (error) throw error;
-
-    const profilesById = new Map();
-    const profileIds = Array.from(new Set(relations.flatMap((relation) =>
-      [relation.requester_id, relation.addressee_id].filter((id) => id !== user.id)
-    )));
-    if (profileIds.length) {
-      const { data: profiles, error: profileError } = await client.from("profiles")
-        .select("id, display_name, avatar_data_url")
-        .in("id", profileIds);
-      if (profileError) throw profileError;
-      profiles.forEach((profile) => profilesById.set(profile.id, profile));
-    }
 
     const requests = document.getElementById("request-list");
     const friends = document.getElementById("friend-list");
@@ -99,7 +88,7 @@
 
     relations.forEach((relation) => {
       const otherId = relation.requester_id === user.id ? relation.addressee_id : relation.requester_id;
-      const profile = profilesById.get(otherId);
+      const profile = relation.requester_id === user.id ? relation.addressee : relation.requester;
       if (!profile) return;
       if (relation.status === "accepted") {
         friendCount += 1;
@@ -108,7 +97,7 @@
           {
             label: "Remove",
             run: async () => {
-              const { error: removeError } = await client.rpc("remove_friend", { friend_id: otherId });
+              const { error: removeError } = await window.piqueueSupabase.rpc("remove_friend", { friend_id: otherId });
               if (removeError) showError(removeError);
               else {
                 status.textContent = "Friend removed.";
@@ -125,7 +114,7 @@
             label: "Accept",
             primary: true,
             run: async () => {
-              const { error: responseError } = await client.rpc("respond_to_friend_request", {
+              const { error: responseError } = await window.piqueueSupabase.rpc("respond_to_friend_request", {
                 request_id: relation.id,
                 accept_request: true
               });
@@ -139,7 +128,7 @@
           {
             label: "Decline",
             run: async () => {
-              const { error: responseError } = await client.rpc("respond_to_friend_request", {
+              const { error: responseError } = await window.piqueueSupabase.rpc("respond_to_friend_request", {
                 request_id: relation.id,
                 accept_request: false
               });
@@ -157,27 +146,57 @@
     status.textContent = "";
   }
 
+  async function sendFriendRequest(profile, button) {
+    button.disabled = true;
+    try {
+      const { error } = await window.piqueueSupabase.rpc("request_friend_by_id", {
+        friend_id: profile.id
+      });
+      if (error) throw error;
+      status.textContent = "Friend request sent to " + profile.display_name + ".";
+      await loadFriends(signedInUser);
+    } catch (error) {
+      showError(error);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
-    const { error } = await client.rpc("request_friend_by_email", {
-      friend_email: document.getElementById("friend-email").value.trim()
-    });
-    button.disabled = false;
-    if (error) {
+    searchResults.replaceChildren();
+    emptySearchResults.hidden = true;
+    status.textContent = "Searching players…";
+    try {
+      const { data: profiles, error } = await window.piqueueSupabase.rpc("search_profiles_by_nickname", {
+        nickname_query: document.getElementById("friend-nickname").value.trim()
+      });
+      if (error) throw error;
+      if (!profiles.length) {
+        emptySearchResults.hidden = false;
+        status.textContent = "";
+        return;
+      }
+      profiles.forEach((profile) => {
+        searchResults.append(card(profile, [{
+          label: "Add friend",
+          primary: true,
+          run: (event) => sendFriendRequest(profile, event.currentTarget)
+        }]));
+      });
+      status.textContent = profiles.length + (profiles.length === 1 ? " player found." : " players found.");
+    } catch (error) {
       showError(error);
-      return;
+    } finally {
+      button.disabled = false;
     }
-    document.getElementById("friend-email").value = "";
-    status.textContent = "Friend request sent.";
-    const { data } = await client.auth.getUser();
-    if (data.user) await loadFriends(data.user);
   });
 
   document.getElementById("add-self").addEventListener("click", async () => {
     try {
-      const { data: profile, error } = await client.from("profiles")
+      const { data: profile, error } = await window.piqueueSupabase.from("profiles")
         .select("id, display_name, avatar_data_url")
         .eq("id", signedInUser.id)
         .single();

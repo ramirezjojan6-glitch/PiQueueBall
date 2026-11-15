@@ -28,5 +28,41 @@
     };
   }
 
-  window.piqueueballHistory = { queueFromRecord };
+  function matchIncludesPlayer(match, playerId, playerName) {
+    const normalizedName = typeof playerName === "string" ? playerName.trim().toLocaleLowerCase() : "";
+    return match.teams.some((team) => team.some((player) => {
+      if (player.id === playerId || player.userId === playerId) return true;
+      return !player.userId && normalizedName
+        && player.name.trim().toLocaleLowerCase() === normalizedName;
+    }));
+  }
+
+  function removeHistoryMatches(state, shouldRemove, additionalQueueIds = []) {
+    const removedQueueIds = new Set(additionalQueueIds);
+    const removedResultIds = new Set();
+    const keptResults = [];
+
+    state.results.forEach((result) => {
+      if (removedQueueIds.has(result.queueId) || shouldRemove(result)) {
+        if (result.queueId) removedQueueIds.add(result.queueId);
+        if (result.id) removedResultIds.add(result.id);
+      } else {
+        keptResults.push(result);
+      }
+    });
+
+    const keptQueues = state.queueHistory.filter((queue) =>
+      !removedQueueIds.has(queue.id)
+      && !removedQueueIds.has(queue.resultId)
+      && !removedResultIds.has(queue.resultId)
+    );
+    const removedCount = state.results.length - keptResults.length;
+    state.results = keptResults;
+    state.queueHistory = keptQueues;
+    return { removedQueueIds: Array.from(removedQueueIds), removedCount };
+  }
+
+  const api = { queueFromRecord, matchIncludesPlayer, removeHistoryMatches };
+  if (typeof module === "object" && module.exports) module.exports = api;
+  if (typeof window !== "undefined") window.piqueueballHistory = api;
 }());

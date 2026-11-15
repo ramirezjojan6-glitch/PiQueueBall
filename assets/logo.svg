@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">PiQueueBall logo</title>
+  <desc id="desc">Green square app icon with white PQB. initials</desc>
+  <rect width="1024" height="1024" rx="200" fill="#2A9B5B"/>
+  <text x="512" y="560" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="290" font-weight="700" letter-spacing="-10" fill="#FFFFFF">PQB.</text>
+</svg>

@@ -7,14 +7,22 @@
     "copy-web": "node scripts/copy-web-assets.js",
     "android:sync": "npm run copy-web && cap sync android",
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug && cd .. && node scripts/rename-apk.js",
-    "ios:sync": "npm run copy-web && cap sync ios"
+    "ios:sync": "npm run copy-web && cap sync ios",
+    "test": "node --test tests/*.test.cjs",
+    "lint": "eslint . --ext .js --ignore-pattern 'android/**' --ignore-pattern 'www/**' --ignore-pattern 'node_modules/**'",
+    "ci": "npm run lint && npm test"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.0.0",
     "@capacitor/core": "^8.5.3",
     "@capacitor/ios": "^8.5.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.3"
+    "@capacitor/cli": "^8.5.3",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "sharp": "^0.35.5"
   }
 }

@@ -4,16 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Queue · PiQueueBall</title>
-  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://buzwzmrrtcduownczmdc.supabase.co">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0" as="script" crossorigin>
+  <link rel="icon" href="assets/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="offline.js" defer></script>
   <script src="page-transitions.js" defer></script>
+  <script src="app-state.js" defer></script>
   <script src="supabase-config.js" defer></script>
   <script src="supabase-client.js" defer></script>
   <script src="auth-guard.js" defer></script>
+  <script src="capacitor-auth.js" defer></script>
   <script src="online-sync.js" defer></script>
   <script src="auth-ui.js" defer></script>
+  <script src="logic.js" defer></script>
+  <script src="queue-view-utils.js" defer></script>
   <script src="queue.js" defer></script>
 </head>
 <body>
@@ -42,10 +51,14 @@
       </form>
 
       <ul class="player-list" id="player-list" aria-label="Players in the queue"></ul>
-      <p class="empty-roster" id="empty-roster">Add at least two players to set up a singles match, or four for doubles.</p>
+      <p class="empty-roster" id="empty-roster">No players yet. Add the first one to start building your queue.</p>
 
       <div class="rotation-tools">
-        <button class="btn secondary-button" id="jumble-button" type="button">Jumble queue</button>
+        <div class="rotation-buttons">
+          <button class="btn secondary-button" id="jumble-button" type="button">Jumble queue</button>
+          <button class="btn secondary-button new-session-button" id="new-session-button" type="button"
+            title="Unavailable while a match is in progress">New Session</button>
+        </div>
         <span class="fairness-note" id="fairness-note">Players take turns before anyone gets a second game.</span>
       </div>
 
@@ -67,35 +80,34 @@
         <span><b>Stay with same partner</b><small>Keep partners together; rotate opposing teams.</small></span>
       </label>
 
-      <div class="partner-picker" id="partner-picker" hidden>
-        <div>
-          <p class="picker-title">Choose your own partner</p>
-          <p class="picker-help">Pick yourself and the player you want on your team.</p>
-        </div>
-        <label for="your-player">I am</label>
-        <select id="your-player">
-          <option value="">Choose your name</option>
-        </select>
-        <label for="chosen-partner">My partner</label>
-        <select id="chosen-partner">
-          <option value="">Choose a partner</option>
-        </select>
-        <button class="btn secondary-button save-partner-button" id="save-partner" type="button">Save partner choice</button>
-        <p class="saved-partner" id="saved-partner" aria-live="polite"></p>
-      </div>
-
       <div class="match-card" aria-live="polite">
         <div class="section-heading match-heading">
           <div>
             <p class="eyebrow" id="match-eyebrow">UP NEXT</p>
-            <h2 id="match-title">Match preview</h2>
+            <h2 id="match-title">Next Match</h2>
           </div>
           <span class="match-format" id="match-format">Singles</span>
         </div>
         <div class="match-teams" id="match-teams"></div>
+        <fieldset class="first-server-picker" id="first-server-picker">
+          <legend>Who serves first?</legend>
+          <label for="first-server">Starting server</label>
+          <select id="first-server"></select>
+          <button class="btn secondary-button coin-flip-button" id="coin-flip" type="button">Flip a coin</button>
+          <p class="first-server-note" id="first-server-note" aria-live="polite"></p>
+        </fieldset>
         <div class="mini-stats" id="match-stats" hidden></div>
         <p class="match-message" id="match-message">Add players to create your first match.</p>
         <button class="btn dark start-button" id="start-match" type="button" disabled>Start match</button>
+        <section class="upcoming-queue" aria-labelledby="upcoming-queue-title">
+          <div class="upcoming-queue-heading">
+            <h3 id="upcoming-queue-title">Coming after this match</h3>
+            <span>In queue order</span>
+          </div>
+          <ol class="next-up-list" id="next-up-list" aria-live="polite">
+            <li class="next-up-empty">Add players to see who is coming up.</li>
+          </ol>
+        </section>
       </div>
       <p class="queue-status" id="queue-status" role="status" aria-live="polite"></p>
     </section>

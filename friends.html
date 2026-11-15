@@ -4,14 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Friends · PiQueueBall</title>
-  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://buzwzmrrtcduownczmdc.supabase.co">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0" as="script" crossorigin>
+  <link rel="icon" href="assets/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="offline.js" defer></script>
   <script src="page-transitions.js" defer></script>
+  <script src="app-state.js" defer></script>
   <script src="supabase-config.js" defer></script>
   <script src="supabase-client.js" defer></script>
   <script src="auth-guard.js" defer></script>
+  <script src="capacitor-auth.js" defer></script>
   <script src="auth-ui.js" defer></script>
   <script src="friends.js" defer></script>
 </head>
@@ -32,12 +39,14 @@
           <h2 id="add-friend-title">Find a player</h2>
         </div>
       </div>
-      <p class="profile-help">Search by the email address they use for their PiQueueBall account.</p>
+      <p class="profile-help">Search for a player's nickname to find their PiQueueBall profile.</p>
       <form class="friend-form" id="friend-form">
-        <label class="visually-hidden" for="friend-email">Friend's account email</label>
-        <input id="friend-email" type="email" placeholder="Friend's account email" autocomplete="email" required>
-        <button class="btn add-button" type="submit">Find and add player</button>
+        <label class="visually-hidden" for="friend-nickname">Player nickname</label>
+        <input id="friend-nickname" type="search" minlength="2" maxlength="40" placeholder="Search nicknames" autocomplete="off" required>
+        <button class="btn add-button" type="submit">Search players</button>
       </form>
+      <ul class="friend-list" id="search-results" aria-live="polite"></ul>
+      <p class="tracker-empty" id="empty-search-results" hidden>No players found with that nickname.</p>
       <button class="btn secondary-button add-self-button" id="add-self" type="button">Add my player profile to queue</button>
       <p class="queue-status" id="friends-status" role="status" aria-live="polite"></p>
     </section>

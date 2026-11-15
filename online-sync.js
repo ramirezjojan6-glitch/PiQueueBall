@@ -6,9 +6,18 @@
 
   function showSyncStatus(message) {
     sessionStorage.removeItem("piqueueball.sync-status.v1");
-    const status = document.getElementById("tracker-status") || document.getElementById("score-status");
+    const status = document.getElementById("tracker-status") || document.getElementById("score-status")
+      || document.getElementById("queue-status") || document.getElementById("profile-status");
     if (status) status.textContent = message;
     else sessionStorage.setItem("piqueueball.sync-status.v1", message);
+  }
+
+  function withRetry(task, retries = 3) {
+    return task().catch((error) => {
+      if (retries <= 0) throw error;
+      return new Promise((resolve) => setTimeout(resolve, 600 * (4 - retries)))
+        .then(() => withRetry(task, retries - 1));
+    });
   }
 
   function readLocalState() {
@@ -95,16 +104,20 @@
       }));
 
       for (const result of syncableResults) {
-        const { error } = await window.piqueueSupabase.rpc("record_match", matchPayload(state, result));
-        if (error) {
+        try {
+          await withRetry(async () => {
+            const { error } = await window.piqueueSupabase.rpc("record_match", matchPayload(state, result));
+            if (error) throw error;
+          }, 3);
+          result.syncStatus = "synced";
+          delete result.syncError;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (error) {
           result.syncError = error.message || "Unable to synchronize this match.";
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           showSyncStatus("Some locally saved matches could not sync: " + result.syncError);
           return;
         }
-        result.syncStatus = "synced";
-        delete result.syncError;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       }
 
       if (blockedCount || syncableResults.length) {

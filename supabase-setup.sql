@@ -2,9 +2,21 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text not null default 'Player',
   avatar_data_url text not null default '',
+  skill_level text,
+  profile_setup_complete boolean not null default true,
   updated_at timestamptz not null default now(),
   constraint profiles_display_name_length check (char_length(display_name) between 1 and 40),
+  constraint profiles_skill_level_check check (
+    skill_level is null or skill_level in ('Beginner', 'Advanced Beginner', 'Intermediate', 'Pro')
+  ),
   constraint profiles_avatar_size check (octet_length(avatar_data_url) <= 1500000)
+);
+
+alter table public.profiles add column if not exists skill_level text;
+alter table public.profiles add column if not exists profile_setup_complete boolean not null default true;
+alter table public.profiles drop constraint if exists profiles_skill_level_check;
+alter table public.profiles add constraint profiles_skill_level_check check (
+  skill_level is null or skill_level in ('Beginner', 'Advanced Beginner', 'Intermediate', 'Pro')
 );
 
 create table if not exists public.friendships (
@@ -100,10 +112,11 @@ security definer
 set search_path = ''
 as $$
 begin
-  insert into public.profiles (id, display_name)
+  insert into public.profiles (id, display_name, profile_setup_complete)
   values (
     new.id,
-    coalesce(nullif(trim(new.raw_user_meta_data ->> 'display_name'), ''), split_part(new.email, '@', 1), 'Player')
+    coalesce(nullif(trim(new.raw_user_meta_data ->> 'display_name'), ''), 'Player'),
+    false
   )
   on conflict (id) do nothing;
   return new;
@@ -153,6 +166,104 @@ begin
   values (auth.uid(), target_id)
   returning id into request_id;
   return request_id;
+end;
+$$;
+
+create or replace function public.search_profiles_by_nickname(nickname_query text)
+returns table (id uuid, display_name text, avatar_data_url text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in to search for players.';
+  end if;
+  if char_length(trim(nickname_query)) not between 2 and 40 then
+    raise exception 'Enter between 2 and 40 characters to search.';
+  end if;
+
+  return query
+  select profiles.id, profiles.display_name, profiles.avatar_data_url
+  from public.profiles as profiles
+  where profiles.id <> auth.uid()
+    and profiles.display_name ilike '%' || trim(nickname_query) || '%'
+  order by profiles.display_name
+  limit 20;
+end;
+$$;
+
+create or replace function public.request_friend_by_id(friend_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  request_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in to add a friend.';
+  end if;
+  if friend_id = auth.uid() then
+    raise exception 'You cannot add yourself as a friend.';
+  end if;
+  if not exists (select 1 from public.profiles where id = friend_id) then
+    raise exception 'No player account was found.';
+  end if;
+
+  select id into request_id from public.friendships
+  where (requester_id = auth.uid() and addressee_id = friend_id)
+    or (requester_id = friend_id and addressee_id = auth.uid())
+  limit 1;
+  if request_id is not null then
+    raise exception 'A friend request or friendship already exists.';
+  end if;
+
+  insert into public.friendships (requester_id, addressee_id)
+  values (auth.uid(), friend_id)
+  returning id into request_id;
+  return request_id;
+end;
+$$;
+
+create or replace function public.request_friend_for_queue(friend_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  existing_request record;
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in to add a friend.';
+  end if;
+  if friend_id = auth.uid() then
+    raise exception 'You cannot add yourself as a friend.';
+  end if;
+  if not exists (select 1 from public.profiles where id = friend_id) then
+    raise exception 'No player account was found.';
+  end if;
+
+  select status, requester_id into existing_request
+  from public.friendships
+  where (requester_id = auth.uid() and addressee_id = friend_id)
+    or (requester_id = friend_id and addressee_id = auth.uid())
+  limit 1;
+  if found then
+    if existing_request.status = 'accepted' then
+      return 'already_friends';
+    end if;
+    if existing_request.requester_id = auth.uid() then
+      return 'request_pending';
+    end if;
+    return 'incoming_request';
+  end if;
+
+  insert into public.friendships (requester_id, addressee_id)
+  values (auth.uid(), friend_id);
+  return 'request_sent';
 end;
 $$;
 
@@ -312,13 +423,81 @@ begin
 end;
 $$;
 
+create or replace function public.delete_match_record(p_client_match_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in to delete a saved match.';
+  end if;
+
+  delete from public.match_records
+  where created_by = auth.uid()
+    and client_match_id = p_client_match_id;
+  if not found then
+    raise exception 'Match not found or you do not have permission to delete it.';
+  end if;
+end;
+$$;
+
+create or replace function public.delete_player_match_history(p_player_id uuid, p_player_name text)
+returns table(client_match_id uuid)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in to delete saved player history.';
+  end if;
+  if p_player_id is null and nullif(trim(p_player_name), '') is null then
+    raise exception 'A player must be selected.';
+  end if;
+
+  return query
+  with deleted_matches as (
+    delete from public.match_records as match_record
+    where match_record.created_by = auth.uid()
+      and exists (
+        select 1
+        from public.match_players as participant
+        where participant.match_id = match_record.id
+          and (
+            (p_player_id is not null and participant.player_id = p_player_id)
+            or (
+              participant.player_id is null
+              and lower(participant.player_name) = lower(trim(p_player_name))
+            )
+          )
+      )
+    returning match_record.client_match_id
+  )
+  select deleted_matches.client_match_id from deleted_matches;
+end;
+$$;
+
 revoke all on function public.request_friend_by_email(text) from public, anon;
+revoke all on function public.search_profiles_by_nickname(text) from public, anon;
+revoke all on function public.request_friend_by_id(uuid) from public, anon;
+revoke all on function public.request_friend_for_queue(uuid) from public, anon;
 revoke all on function public.lookup_profile_by_email(text) from public, anon;
 revoke all on function public.respond_to_friend_request(uuid, boolean) from public, anon;
 revoke all on function public.remove_friend(uuid) from public, anon;
 revoke all on function public.record_match(uuid, text, integer, integer, jsonb, jsonb, timestamptz, timestamptz) from public, anon;
+revoke all on function public.delete_match_record(uuid) from public, anon;
+revoke all on function public.delete_player_match_history(uuid, text) from public, anon;
 grant execute on function public.request_friend_by_email(text) to authenticated;
+grant execute on function public.search_profiles_by_nickname(text) to authenticated;
+grant execute on function public.request_friend_by_id(uuid) to authenticated;
+grant execute on function public.request_friend_for_queue(uuid) to authenticated;
 grant execute on function public.lookup_profile_by_email(text) to authenticated;
 grant execute on function public.respond_to_friend_request(uuid, boolean) to authenticated;
 grant execute on function public.remove_friend(uuid) to authenticated;
 grant execute on function public.record_match(uuid, text, integer, integer, jsonb, jsonb, timestamptz, timestamptz) to authenticated;
+grant execute on function public.delete_match_record(uuid) to authenticated;
+grant execute on function public.delete_player_match_history(uuid, text) to authenticated;
+
+notify pgrst, 'reload schema';

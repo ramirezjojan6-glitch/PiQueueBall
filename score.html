@@ -4,16 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Game Scores · PiQueueBall</title>
-  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://buzwzmrrtcduownczmdc.supabase.co">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0" as="script" crossorigin>
+  <link rel="icon" href="assets/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="offline.js" defer></script>
   <script src="page-transitions.js" defer></script>
+  <script src="app-state.js" defer></script>
   <script src="supabase-config.js" defer></script>
   <script src="supabase-client.js" defer></script>
   <script src="auth-guard.js" defer></script>
+  <script src="capacitor-auth.js" defer></script>
   <script src="online-sync.js" defer></script>
   <script src="auth-ui.js" defer></script>
+  <script src="logic.js" defer></script>
   <script src="score.js" defer></script>
 </head>
 <body>
@@ -46,9 +54,41 @@
           </div>
           <span class="match-format" id="score-format"></span>
         </div>
+        <section class="pickleball-tracker" id="pickleball-tracker" aria-label="Pickleball serve tracker" hidden>
+          <div class="mini-court" role="group" aria-label="Player positions on the pickleball court">
+            <img class="mini-court-image" src="assets/pickleball-court.png" alt="Pickleball court">
+            <div class="court-half court-away" data-team="1">
+              <span class="court-team-label" id="court-team-1"></span>
+              <div class="court-lanes">
+                <span class="court-player" data-position="left"></span>
+                <span class="court-player" data-position="right"></span>
+              </div>
+            </div>
+            <div class="court-half court-near" data-team="0">
+              <span class="court-team-label" id="court-team-0"></span>
+              <div class="court-lanes">
+                <span class="court-player" data-position="left"></span>
+                <span class="court-player" data-position="right"></span>
+              </div>
+            </div>
+          </div>
+          <div class="serving-banner" id="serving-banner" aria-live="polite">
+            <span class="serving-indicator" aria-hidden="true"></span>
+            <div><p class="serving-kicker">NOW SERVING</p><p class="serving-player" id="serving-player"></p></div>
+            <span class="serving-side" id="serving-side"></span>
+          </div>
+          <div class="pickleball-score-call">
+            <div><p class="eyebrow">SCORE CALL</p><p class="score-call" id="score-call"></p></div>
+            <p class="score-call-help">Server's score · receiver's score<span id="score-call-server-help"> · server number</span></p>
+          </div>
+          <div class="rally-actions">
+            <button class="btn dark rally-button" id="serving-team-won" type="button">Serving team won the rally</button>
+            <button class="btn secondary-button rally-button" id="serving-team-lost" type="button">Serving team lost the rally</button>
+          </div>
+        </section>
         <div class="match-teams" id="score-teams"></div>
         <p class="score-message" id="score-message" role="status" aria-live="polite"></p>
-        <button class="btn dark start-button" id="complete-match" type="button" disabled>Complete match</button>
+        <button class="btn dark start-button" id="complete-match" type="button" disabled>End Match</button>
       </div>
       <p class="queue-status" id="score-status" role="status" aria-live="polite"></p>
     </section>

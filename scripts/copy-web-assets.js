@@ -18,3 +18,12 @@ for (const name of fs.readdirSync(projectRoot)) {
 fs.cpSync(path.join(projectRoot, "assets"), path.join(webDirectory, "assets"), {
   recursive: true
 });
+
+fs.copyFileSync(
+  path.join(projectRoot, "node_modules", "@capacitor", "core", "dist", "capacitor.js"),
+  path.join(webDirectory, "capacitor-core.js")
+);
+fs.copyFileSync(
+  path.join(projectRoot, "node_modules", "@capacitor", "app", "dist", "plugin.js"),
+  path.join(webDirectory, "capacitor-app-plugin.js")
+);

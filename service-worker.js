@@ -1,11 +1,12 @@
 "use strict";
 
-const CACHE_NAME = "piqueueball-offline-v7";
+const CACHE_NAME = "piqueueball-offline-v23";
 const APP_FILES = [
   "./",
   "./index.html",
   "./login.html",
   "./signup.html",
+  "./profile-setup.html",
   "./home.html",
   "./score.html",
   "./totals.html",
@@ -13,21 +14,28 @@ const APP_FILES = [
   "./profiles.html",
   "./friends.html",
   "./styles.css",
+  "./app-state.js",
   "./offline.js",
   "./page-transitions.js",
   "./supabase-config.js",
   "./supabase-client.js",
   "./auth-guard.js",
+  "./capacitor-auth.js",
   "./online-sync.js",
   "./auth-ui.js",
   "./history-utils.js",
   "./auth-pages.js",
+  "./auth-validation.js",
+  "./profile-setup.js",
   "./queue.js",
+  "./queue-view-utils.js",
+  "./logic.js",
   "./score.js",
   "./tracker-pages.js",
   "./profiles.js",
   "./friends.js",
-  "./assets/logo.png"
+  "./assets/logo.svg",
+  "./assets/pickleball-court.png"
 ];
 
 self.addEventListener("install", (event) => {

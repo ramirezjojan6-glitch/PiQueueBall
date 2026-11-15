@@ -1,26 +1,23 @@
 (function () {
   "use strict";
 
-  const offlineMode = localStorage.getItem("piqueueball.offline.v1") === "true";
+  const app = window.piqueueApp;
+  const offlineMode = app.getOfflineMode();
+
+  function updateStatus(message) {
+    const status = app.getStatusElement();
+    if (status) status.textContent = message;
+  }
 
   window.addEventListener("piqueueball:supabase-error", (event) => {
     if (offlineMode) return;
-    const status = document.getElementById("queue-status") || document.getElementById("profile-status")
-      || document.getElementById("score-status") || document.getElementById("tracker-status")
-      || document.getElementById("friends-status");
-    if (status) status.textContent = event.detail;
+    updateStatus(event.detail);
   });
-  if (window.piqueueballSupabaseError && !offlineMode) {
-    const status = document.getElementById("queue-status") || document.getElementById("profile-status")
-      || document.getElementById("score-status") || document.getElementById("tracker-status")
-      || document.getElementById("friends-status");
-    if (status) status.textContent = window.piqueueballSupabaseError;
+  if (app.getError("supabase") && !offlineMode) {
+    updateStatus(app.getError("supabase"));
   }
-  if (window.piqueueballAuthError && !offlineMode) {
-    const status = document.getElementById("queue-status") || document.getElementById("profile-status")
-      || document.getElementById("score-status") || document.getElementById("tracker-status")
-      || document.getElementById("friends-status");
-    if (status) status.textContent = window.piqueueballAuthError;
+  if (app.getError("auth") && !offlineMode) {
+    updateStatus(app.getError("auth"));
   }
 
   window.piqueueAuth.ready.then((session) => {
@@ -42,7 +39,7 @@
     const userLabel = document.getElementById("account-email");
     if (userLabel) {
       userLabel.textContent = user.user_metadata && user.user_metadata.display_name || "Loading profile…";
-      window.piqueueSupabase.from("profiles")
+      app.getSupabase().from("profiles")
         .select("display_name")
         .eq("id", user.id)
         .single()

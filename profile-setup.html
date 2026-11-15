@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up your profile · PiQueueBall</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://buzwzmrrtcduownczmdc.supabase.co">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0" as="script" crossorigin>
+  <link rel="icon" href="assets/logo.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="offline.js" defer></script>
+  <script src="page-transitions.js" defer></script>
+  <script src="app-state.js" defer></script>
+  <script src="supabase-config.js" defer></script>
+  <script src="supabase-client.js" defer></script>
+  <script src="auth-guard.js" defer></script>
+  <script src="capacitor-auth.js" defer></script>
+  <script src="profile-setup.js" defer></script>
+</head>
+<body>
+  <main class="screen green profile-setup-screen">
+    <span class="circle c1"></span><span class="circle c2"></span>
+    <span class="circle c3"></span><span class="circle c4"></span>
+    <section class="profile-setup-card" aria-labelledby="setup-title">
+      <header class="profile-setup-header">
+        <span class="setup-brand" aria-label="PiQueueBall">PQB.</span>
+        <p class="setup-eyebrow">WELCOME TO PIQUEUEBALL</p>
+        <h1 id="setup-title">Set up your player profile</h1>
+      </header>
+
+      <div class="setup-progress">
+        <div class="setup-progress-top">
+          <span id="setup-progress-label">1 of 3</span>
+          <button class="setup-back" id="setup-back" type="button" disabled>Back</button>
+        </div>
+        <div class="setup-progress-track" role="progressbar" aria-label="Profile setup progress" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1">
+          <span id="setup-progress-fill"></span>
+        </div>
+      </div>
+
+      <section class="setup-step" data-setup-step="0" aria-labelledby="name-step-title">
+        <p class="eyebrow">STEP 1</p>
+        <h2 id="name-step-title">What should we call you?</h2>
+        <p class="setup-help">Choose the name other players will see.</p>
+        <label class="profile-field-label" for="setup-name">Display name</label>
+        <input class="profile-input" id="setup-name" maxlength="40" autocomplete="nickname" required>
+        <div class="setup-actions">
+          <button class="btn dark start-button" type="button" data-setup-action="continue">Continue</button>
+          <button class="setup-skip" type="button" data-setup-action="skip">Skip</button>
+        </div>
+      </section>
+
+      <section class="setup-step" data-setup-step="1" aria-labelledby="picture-step-title" hidden>
+        <p class="eyebrow">STEP 2</p>
+        <h2 id="picture-step-title">Add a profile picture</h2>
+        <p class="setup-help">Upload a photo or pick a colorful default avatar.</p>
+        <div class="setup-avatar-preview">
+          <img id="setup-avatar-preview" alt="Selected profile picture preview" hidden>
+          <span id="setup-avatar-initials" aria-hidden="true">PQ</span>
+        </div>
+        <div class="avatar-choice-grid" role="group" aria-label="Choose a default avatar">
+          <button class="avatar-choice" type="button" data-avatar-choice="green" aria-label="Green avatar" aria-pressed="false"><span class="avatar-choice-art avatar-green"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="11" r="6"/><path d="M5 29c.8-6.1 4.7-9 11-9s10.2 2.9 11 9"/></svg></span></button>
+          <button class="avatar-choice" type="button" data-avatar-choice="sky" aria-label="Sky blue avatar" aria-pressed="false"><span class="avatar-choice-art avatar-sky"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="11" r="6"/><path d="M5 29c.8-6.1 4.7-9 11-9s10.2 2.9 11 9"/></svg></span></button>
+          <button class="avatar-choice" type="button" data-avatar-choice="sun" aria-label="Sunshine avatar" aria-pressed="false"><span class="avatar-choice-art avatar-sun"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="11" r="6"/><path d="M5 29c.8-6.1 4.7-9 11-9s10.2 2.9 11 9"/></svg></span></button>
+          <button class="avatar-choice" type="button" data-avatar-choice="berry" aria-label="Berry avatar" aria-pressed="false"><span class="avatar-choice-art avatar-berry"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="11" r="6"/><path d="M5 29c.8-6.1 4.7-9 11-9s10.2 2.9 11 9"/></svg></span></button>
+        </div>
+        <label class="profile-field-label" for="setup-picture">Or upload your own photo</label>
+        <input class="profile-file" id="setup-picture" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+        <p class="setup-help">PNG, JPEG, WebP, or GIF, up to 1 MB.</p>
+        <div class="setup-actions">
+          <button class="btn dark start-button" type="button" data-setup-action="continue">Continue</button>
+          <button class="setup-skip" type="button" data-setup-action="skip">Skip</button>
+        </div>
+      </section>
+
+      <section class="setup-step" data-setup-step="2" aria-labelledby="skill-step-title" hidden>
+        <p class="eyebrow">STEP 3</p>
+        <h2 id="skill-step-title">Choose your skill level</h2>
+        <p class="setup-help">This helps players find a good match.</p>
+        <div class="skill-choice-grid" role="group" aria-label="Choose your skill level">
+          <button class="skill-choice" type="button" data-skill-level="Beginner" aria-pressed="false">Beginner</button>
+          <button class="skill-choice" type="button" data-skill-level="Advanced Beginner" aria-pressed="false">Advanced Beginner</button>
+          <button class="skill-choice" type="button" data-skill-level="Intermediate" aria-pressed="false">Intermediate</button>
+          <button class="skill-choice" type="button" data-skill-level="Pro" aria-pressed="false">Pro</button>
+        </div>
+        <div class="setup-actions">
+          <button class="btn dark start-button" type="button" data-setup-action="continue">Continue</button>
+          <button class="setup-skip" type="button" data-setup-action="skip">Skip</button>
+        </div>
+      </section>
+
+      <section class="setup-step setup-complete" data-setup-complete hidden aria-labelledby="queue-up-title">
+        <span class="setup-complete-mark" aria-hidden="true">✓</span>
+        <p class="eyebrow">YOU'RE ALL SET</p>
+        <h2 id="queue-up-title">Queue up</h2>
+        <p class="setup-help">Your profile is ready. Let’s get you on the court.</p>
+        <button class="btn dark start-button" id="queue-up-button" type="button">Queue up</button>
+      </section>
+      <p class="queue-status" id="setup-status" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+</body>
+</html>

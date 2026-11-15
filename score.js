@@ -9,6 +9,17 @@
   const scoreMessage = document.getElementById("score-message");
   const completeButton = document.getElementById("complete-match");
   const status = document.getElementById("score-status");
+  const pickleballTracker = document.getElementById("pickleball-tracker");
+  const servingPlayer = document.getElementById("serving-player");
+  const servingSide = document.getElementById("serving-side");
+  const scoreCallElement = document.getElementById("score-call");
+  const scoreCallServerHelp = document.getElementById("score-call-server-help");
+  const courtTeamLabels = [
+    document.getElementById("court-team-0"),
+    document.getElementById("court-team-1")
+  ];
+  const servingTeamWonButton = document.getElementById("serving-team-won");
+  const servingTeamLostButton = document.getElementById("serving-team-lost");
 
   function validScore(value) {
     return Number.isInteger(value) && value >= 0;
@@ -26,18 +37,24 @@
     let value;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) throw new Error("No saved match data was found.");
+      if (!saved) return null;
       value = JSON.parse(saved);
     } catch (error) {
       status.textContent = "Unable to read saved match data. Return to the queue and try again.";
       return null;
     }
-    if (!value || !Array.isArray(value.players) || !value.currentMatch
-      || !Array.isArray(value.currentMatch.teams) || value.currentMatch.teams.length !== 2
+    if (!value || !Array.isArray(value.players)) {
+      status.textContent = "Saved match data is invalid. Return to the queue and try again.";
+      return null;
+    }
+    if (!value.currentMatch) return null;
+    if (!Array.isArray(value.currentMatch.teams) || value.currentMatch.teams.length !== 2
       || !value.currentMatch.teams.every(Array.isArray)) {
+      status.textContent = "Saved match data is invalid. Return to the queue and try again.";
       return null;
     }
     const currentMatch = value.currentMatch;
+    currentMatch.mode = currentMatch.mode === "doubles" ? "doubles" : "singles";
     currentMatch.scores = Array.isArray(currentMatch.scores) && currentMatch.scores.length === 2
       ? currentMatch.scores.map((score) => validScore(score) ? score : null)
       : [0, 0];
@@ -46,8 +63,6 @@
     value.queueHistory = Array.isArray(value.queueHistory) ? value.queueHistory : [];
     return value;
   }
-
-  const state = readState();
 
   function saveState() {
     try {
@@ -59,26 +74,42 @@
     }
   }
 
-  let scoreSaveTimer = null;
-  function scheduleScoreSave() {
-    window.clearTimeout(scoreSaveTimer);
-    scoreSaveTimer = window.setTimeout(() => {
-      scoreSaveTimer = null;
-      saveState();
-    }, 200);
+  let state = readState();
+
+  function validPickleballState(game, match) {
+    return game && game.mode === match.mode
+      && Array.isArray(game.teams) && game.teams.length === 2
+      && game.teams.every((team, index) => Array.isArray(team)
+        && team.length === match.teams[index].length
+        && team.every((id, playerIndex) => id === match.teams[index][playerIndex]))
+      && Array.isArray(game.scores) && game.scores.length === 2 && game.scores.every(validScore)
+      && Number.isInteger(game.servingTeam) && game.servingTeam >= 0 && game.servingTeam <= 1
+      && game.teams[game.servingTeam].includes(game.serverId)
+      && Array.isArray(game.rightPlayerIds)
+      && (game.mode === "singles"
+        ? game.rightPlayerIds.length === 0
+        : game.rightPlayerIds.length === 2
+          && game.rightPlayerIds.every((id, index) => game.teams[index].includes(id)))
+      && (game.mode === "singles" || (game.serverNumber === 1 || game.serverNumber === 2))
+      && (game.mode === "singles" || typeof game.openingServe === "boolean");
   }
 
-  function flushScoreSave() {
-    if (scoreSaveTimer === null) return;
-    window.clearTimeout(scoreSaveTimer);
-    scoreSaveTimer = null;
-    saveState();
+  if (state && state.currentMatch) {
+    const match = state.currentMatch;
+    if (!validPickleballState(match.pickleball, match)) {
+      try {
+        match.pickleball = window.PickleballLogic.createGameState(match.mode, match.teams, match.teams[0][0]);
+        match.pickleball.scores = match.scores.map((score) => validScore(score) ? score : 0);
+        match.scores = match.pickleball.scores.slice();
+        saveState();
+      } catch (error) {
+        status.textContent = error.message || "Unable to initialize the pickleball score tracker.";
+        state = null;
+      }
+    } else {
+      match.scores = match.pickleball.scores.slice();
+    }
   }
-
-  window.addEventListener("pagehide", flushScoreSave);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") flushScoreSave();
-  });
 
   function playerFor(id) {
     return state.players.find((player) => player.id === id);
@@ -151,29 +182,86 @@
       });
       const control = document.createElement("div");
       control.className = "team-score";
-      const inputId = "team-score-" + index;
-      const inputLabel = document.createElement("label");
-      inputLabel.htmlFor = inputId;
-      inputLabel.textContent = "Score";
-      const input = document.createElement("input");
-      input.id = inputId;
-      input.type = "number";
-      input.min = "0";
-      input.step = "1";
-      input.inputMode = "numeric";
-      input.value = validScore(state.currentMatch.scores[index]) ? String(state.currentMatch.scores[index]) : "";
-      input.setAttribute("aria-label", (isDoubles ? "Team " : "Player ") + (index + 1) + " score");
-      input.addEventListener("input", () => {
-        const score = input.value === "" ? null : Number(input.value);
-        state.currentMatch.scores[index] = validScore(score) ? score : null;
-        scheduleScoreSave();
-        updateScoreMessage();
-      });
-      control.append(inputLabel, input);
+      const scoreLabel = document.createElement("span");
+      scoreLabel.className = "score-label";
+      scoreLabel.textContent = "SCORE";
+      const score = document.createElement("output");
+      score.className = "score-value";
+      score.id = "team-score-" + index;
+      score.setAttribute("aria-label", (isDoubles ? "Team " : "Player ") + (index + 1) + " score");
+      score.textContent = String(state.currentMatch.pickleball.scores[index]);
+      control.append(scoreLabel, score);
       card.append(label, names, control);
       scoreTeams.append(card);
     });
+    renderPickleballTracker();
     updateScoreMessage();
+  }
+
+  function displayName(playerId, teamIndex) {
+    const snapshot = state.currentMatch.names && state.currentMatch.names[teamIndex]
+      ? state.currentMatch.names[teamIndex].find((player) => player.id === playerId)
+      : null;
+    const player = playerFor(playerId);
+    return snapshot ? snapshot.name : player ? player.name : "Unknown player";
+  }
+
+  function renderPickleballTracker() {
+    const game = state.currentMatch.pickleball;
+    const mode = game.mode;
+    const miniCourt = document.querySelector(".mini-court");
+    miniCourt.dataset.mode = mode;
+    const info = window.PickleballLogic.servingInfo(game);
+    const serverName = displayName(info.serverId, info.teamIndex);
+    const servingTeamName = mode === "doubles" ? "Team " + (info.teamIndex + 1) : serverName;
+    servingPlayer.textContent = serverName + (mode === "doubles" ? " · " + servingTeamName
+      + " · Server " + info.serverNumber : "");
+    servingSide.textContent = "Serve from " + info.side;
+    scoreCallElement.textContent = info.scoreCall;
+    scoreCallServerHelp.hidden = mode !== "doubles";
+    courtTeamLabels.forEach((label, index) => {
+      label.textContent = mode === "doubles"
+        ? "TEAM " + (index + 1)
+        : displayName(game.teams[index][0], index);
+    });
+
+    const positions = window.PickleballLogic.courtPositions(game);
+    document.querySelectorAll(".court-half").forEach((half) => {
+      const teamIndex = Number(half.dataset.team);
+      half.classList.toggle("is-singles", mode === "singles");
+      const teamPositions = positions[teamIndex];
+      half.querySelectorAll(".court-player").forEach((marker) => {
+        const courtSide = marker.dataset.position;
+        const playerId = teamPositions[courtSide];
+        marker.hidden = !playerId;
+        marker.classList.toggle("is-serving", playerId === info.serverId);
+        marker.textContent = playerId ? displayName(playerId, teamIndex) : "";
+        marker.setAttribute("aria-label", playerId
+          ? displayName(playerId, teamIndex)
+            + (playerId === info.serverId ? ", serving from the " + info.side + " side" : ", " + courtSide + " side")
+          : "");
+      });
+    });
+    pickleballTracker.hidden = false;
+  }
+
+  function recordRally(won) {
+    if (!state || !state.currentMatch || !state.currentMatch.pickleball) return;
+    const previousGame = state.currentMatch.pickleball;
+    const previousScores = state.currentMatch.scores;
+    const nextGame = won
+      ? window.PickleballLogic.rallyWon(previousGame)
+      : window.PickleballLogic.rallyLost(previousGame);
+    state.currentMatch.pickleball = nextGame;
+    state.currentMatch.scores = nextGame.scores.slice();
+    status.textContent = "";
+    if (!saveState()) {
+      state.currentMatch.pickleball = previousGame;
+      state.currentMatch.scores = previousScores;
+      renderScores();
+      return;
+    }
+    renderScores();
   }
 
   function updateScoreMessage() {
@@ -181,9 +269,9 @@
     const valid = scores.length === 2 && scores.every(validScore);
     completeButton.disabled = !valid || scores[0] === scores[1];
     if (!valid) {
-      scoreMessage.textContent = "Enter a non-negative whole-number score for both sides.";
+      scoreMessage.textContent = "Record each rally to update the score.";
     } else if (scores[0] === scores[1]) {
-      scoreMessage.textContent = "Scores are tied. Update a score to complete the match.";
+      scoreMessage.textContent = "The game is tied. Continue recording rallies.";
     } else {
       const winningSide = scores[0] > scores[1] ? 0 : 1;
       scoreMessage.textContent = (state.currentMatch.mode === "doubles" ? "Team " : "Player ")
@@ -199,11 +287,10 @@
       return;
     }
 
-    const currentMatch = state.currentMatch;
     const teams = teamSnapshots();
     const winner = scores[0] > scores[1] ? 0 : 1;
     completeButton.disabled = true;
-    let syncOwnerId = null;
+    let syncOwnerId;
     try {
       const session = await window.piqueueAuth.ready;
       syncOwnerId = session ? session.user.id : null;
@@ -262,8 +349,11 @@
     if (window.piqueueSyncLocalMatches && navigator.onLine) {
       window.piqueueSyncLocalMatches();
     }
-    window.location.href = "results.html";
+    window.location.href = "home.html";
   });
+
+  servingTeamWonButton.addEventListener("click", () => recordRally(true));
+  servingTeamLostButton.addEventListener("click", () => recordRally(false));
 
   if (state) renderScores();
 }());

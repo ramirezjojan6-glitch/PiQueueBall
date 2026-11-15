@@ -1,12 +1,13 @@
 (function () {
   "use strict";
 
+  const app = window.piqueueApp;
   let loading = false;
 
   function reportError(message) {
-    window.piqueueballSupabaseError = message;
+    app.setError("supabase", message);
     window.dispatchEvent(new CustomEvent("piqueueball:supabase-error", {
-      detail: window.piqueueballSupabaseError
+      detail: app.getError("supabase")
     }));
   }
 
@@ -20,7 +21,7 @@
       return;
     }
 
-    window.piqueueSupabase = window.supabase.createClient(
+    app.setSupabase(window.supabase.createClient(
       window.PIQUEUEBALL_SUPABASE.url,
       window.PIQUEUEBALL_SUPABASE.publishableKey,
       {
@@ -30,12 +31,12 @@
           detectSessionInUrl: true
         }
       }
-    );
+    ));
     window.dispatchEvent(new Event("piqueueball:supabase-ready"));
   }
 
   function loadSupabase() {
-    if (window.piqueueSupabase || loading || !window.PIQUEUEBALL_SUPABASE) return;
+    if (app.getSupabase() || loading || !window.PIQUEUEBALL_SUPABASE) return;
     if (window.supabase) {
       initialize();
       return;
@@ -43,6 +44,7 @@
     loading = true;
     const script = document.createElement("script");
     script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0";
+    script.crossOrigin = "anonymous";
     script.async = true;
     script.addEventListener("load", () => {
       loading = false;

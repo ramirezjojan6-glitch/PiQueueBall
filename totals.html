@@ -4,14 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Match Totals · PiQueueBall</title>
-  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://buzwzmrrtcduownczmdc.supabase.co">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0" as="script" crossorigin>
+  <link rel="icon" href="assets/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="offline.js" defer></script>
   <script src="page-transitions.js" defer></script>
+  <script src="app-state.js" defer></script>
   <script src="supabase-config.js" defer></script>
   <script src="supabase-client.js" defer></script>
   <script src="auth-guard.js" defer></script>
+  <script src="capacitor-auth.js" defer></script>
   <script src="online-sync.js" defer></script>
   <script src="auth-ui.js" defer></script>
   <script src="history-utils.js" defer></script>
@@ -36,7 +43,7 @@
       </div>
       <div class="stats-table-wrap">
         <table class="stats-table">
-          <thead><tr><th scope="col">Player</th><th scope="col">Played</th><th scope="col">Won</th><th scope="col">Lost</th></tr></thead>
+          <thead><tr><th scope="col">Player</th><th scope="col">Played</th><th scope="col">Won</th><th scope="col">Lost</th><th scope="col">Actions</th></tr></thead>
           <tbody id="player-stats"></tbody>
         </table>
       </div>

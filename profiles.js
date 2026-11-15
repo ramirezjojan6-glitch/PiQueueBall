@@ -2,9 +2,16 @@
   "use strict";
 
   const MAX_PICTURE_BYTES = 1024 * 1024;
+  const avatarColors = {
+    green: "#4a9a50",
+    sky: "#4c8eb5",
+    sun: "#d99b3d",
+    berry: "#a85d78"
+  };
   const profileForm = document.getElementById("profile-form");
   const profileContent = document.getElementById("profile-content");
   const nicknameInput = document.getElementById("profile-nickname");
+  const skillLevelInput = document.getElementById("profile-skill-level");
   const pictureInput = document.getElementById("profile-picture");
   const picturePreview = document.getElementById("profile-picture-preview");
   const initials = document.getElementById("profile-initials");
@@ -14,8 +21,15 @@
   let ownProfile = null;
   let pendingPicture = "";
 
+  function showProfileError(error) {
+    const message = error && error.message ? error.message : "Unable to load your profile.";
+    status.textContent = /column .* does not exist|schema cache/i.test(message)
+      ? "Profile fields need the latest Supabase schema. Run the updated supabase-setup.sql script, then reload this page."
+      : message;
+  }
+
   function updatePicturePreview(value, profile) {
-    const picture = value || profile && profile.avatar_data_url;
+    const picture = value !== undefined ? value : profile && profile.avatar_data_url;
     if (picture) {
       picturePreview.src = picture;
       picturePreview.hidden = false;
@@ -28,6 +42,15 @@
     }
   }
 
+  function defaultAvatar(color) {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">'
+      + '<rect width="160" height="160" rx="80" fill="' + color + '"/>'
+      + '<circle cx="80" cy="58" r="28" fill="#fff" fill-opacity=".95"/>'
+      + '<path d="M28 148c4-34 23-51 52-51s48 17 52 51" fill="#fff" fill-opacity=".95"/>'
+      + "</svg>";
+    return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+  }
+
   function renderOwnProfile(profile) {
     if (!profile || profile.id !== currentUserId) {
       throw new Error("Only the signed-in user's profile can be shown here.");
@@ -35,13 +58,14 @@
     ownProfile = profile;
     pendingPicture = profile.avatar_data_url || "";
     nicknameInput.value = profile.display_name;
+    skillLevelInput.value = profile.skill_level || "";
     pictureInput.value = "";
     profileForm.hidden = false;
     document.getElementById("profile-display-name").textContent = "Your online player profile";
     updatePicturePreview(profile.avatar_data_url || "", profile);
     profileContent.hidden = false;
     renderCloudStats(profile).catch((error) => {
-      status.textContent = error.message || "Unable to load online match statistics.";
+      showProfileError(error);
     });
   }
 
@@ -50,11 +74,6 @@
     const empty = document.getElementById("empty-profile-stats");
     const list = document.getElementById("partner-stats");
     const partnerEmpty = document.getElementById("empty-partner-stats");
-    const { data: matches, error } = await window.piqueueSupabase.from("match_records")
-      .select("id, client_match_id, mode, score_one, score_two, winner_team, played_at, match_players(player_id, team_index, player_name)")
-      .order("played_at", { ascending: false });
-    if (error) throw error;
-
     const record = { played: 0, wins: 0, losses: 0, lastPlayed: null, recentPartner: null, partners: new Map() };
     const countedMatches = new Set();
     const profileName = profile.display_name.trim().toLocaleLowerCase();
@@ -90,13 +109,25 @@
       }
     }
 
-    matches.forEach((match) => accumulateMatch({
-      id: match.client_match_id || match.id,
-      mode: match.mode,
-      winner: match.winner_team,
-      playedAtValue: match.played_at,
-      members: match.match_players || []
-    }));
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data: matches, error } = await window.piqueueSupabase.from("match_records")
+        .select("id, client_match_id, mode, score_one, score_two, winner_team, played_at, match_players(player_id, team_index, player_name)")
+        .order("played_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      if (!Array.isArray(matches)) throw new Error("Match history could not be loaded.");
+
+      matches.forEach((match) => accumulateMatch({
+        id: match.client_match_id || match.id,
+        mode: match.mode,
+        winner: match.winner_team,
+        playedAtValue: match.played_at,
+        members: match.match_players || []
+      }));
+      if (matches.length < pageSize) break;
+    }
 
     const savedState = localStorage.getItem("piqueueball.queue.v1");
     if (savedState) {
@@ -179,6 +210,9 @@
         return;
       }
       pendingPicture = reader.result;
+      document.querySelectorAll("[data-profile-avatar]").forEach((button) => {
+        button.setAttribute("aria-pressed", "false");
+      });
       updatePicturePreview(pendingPicture, ownProfile);
       status.textContent = "Picture ready. Save your profile to keep it.";
     });
@@ -186,6 +220,18 @@
       status.textContent = "Unable to read the selected picture.";
     });
     reader.readAsDataURL(file);
+  });
+
+  document.querySelectorAll("[data-profile-avatar]").forEach((button) => {
+    button.addEventListener("click", () => {
+      pendingPicture = defaultAvatar(avatarColors[button.dataset.profileAvatar]);
+      pictureInput.value = "";
+      document.querySelectorAll("[data-profile-avatar]").forEach((option) => {
+        option.setAttribute("aria-pressed", String(option === button));
+      });
+      updatePicturePreview(pendingPicture, ownProfile);
+      status.textContent = "Default avatar selected. Save your profile to keep it.";
+    });
   });
 
   removePictureButton.addEventListener("click", () => {
@@ -206,9 +252,10 @@
     try {
       const { data: updatedProfile, error } = await window.piqueueSupabase.from("profiles").update({
         display_name: nicknameInput.value.trim() || "Player",
+        skill_level: skillLevelInput.value || null,
         avatar_data_url: pendingPicture,
         updated_at: new Date().toISOString()
-      }).eq("id", currentUserId).select("id, display_name, avatar_data_url").single();
+      }).eq("id", currentUserId).select("id, display_name, avatar_data_url, skill_level").single();
       if (error) throw error;
       renderOwnProfile(updatedProfile);
       status.textContent = "Profile saved.";
@@ -224,7 +271,7 @@
     if (!session) return;
     currentUserId = session.user.id;
     const { data: profile, error } = await window.piqueueSupabase.from("profiles")
-      .select("id, display_name, avatar_data_url")
+      .select("id, display_name, avatar_data_url, skill_level")
       .eq("id", currentUserId)
       .single();
     if (error) throw error;
@@ -232,6 +279,6 @@
   }
 
   window.piqueueAuth.ready.then(() => loadOwnProfile()).catch((error) => {
-    status.textContent = error.message || "Your profile could not be loaded.";
+    showProfileError(error);
   });
 }());

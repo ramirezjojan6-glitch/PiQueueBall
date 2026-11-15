@@ -49,3 +49,50 @@ test("queue snapshots preserve guest players and unassigned queue entries", () =
   assert.equal(JSON.stringify(queue.teams.map((team) => team.map((player) => player.id))),
     JSON.stringify([["p1"], []]));
 });
+
+test("matches registered players by ID and unlinked players by name", () => {
+  const match = {
+    teams: [
+      [{ id: "profile-1", userId: "profile-1", name: "Player One" }],
+      [{ id: "guest:match-1:1", name: "Guest Player" }]
+    ]
+  };
+
+  assert.equal(appWindow.piqueueballHistory.matchIncludesPlayer(match, "profile-1", "Other Name"), true);
+  assert.equal(appWindow.piqueueballHistory.matchIncludesPlayer(match, "missing-id", " guest player "), true);
+  assert.equal(appWindow.piqueueballHistory.matchIncludesPlayer(match, "missing-id", "Another Player"), false);
+});
+
+test("removes matching results and their queue snapshots but preserves unrelated history", () => {
+  const state = {
+    results: [
+      { id: "result-1", queueId: "queue-1", player: "remove" },
+      { id: "result-2", queueId: "queue-2", player: "keep" }
+    ],
+    queueHistory: [
+      { id: "queue-1", resultId: "result-1" },
+      { id: "queue-2", resultId: "result-2" },
+      { id: "queue-3", resultId: "result-3" }
+    ]
+  };
+
+  const removed = appWindow.piqueueballHistory.removeHistoryMatches(
+    state, (result) => result.player === "remove"
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(state.results.map((result) => result.id))), ["result-2"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.queueHistory.map((queue) => queue.id))), ["queue-2", "queue-3"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(removed)), { removedQueueIds: ["queue-1"], removedCount: 1 });
+});
+
+test("removes a match and its queue snapshot when selected by queue ID", () => {
+  const state = {
+    results: [{ id: "result-1", queueId: "queue-1" }],
+    queueHistory: [{ id: "queue-1", resultId: "result-1" }]
+  };
+
+  appWindow.piqueueballHistory.removeHistoryMatches(state, () => false, ["queue-1"]);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(state.results)), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.queueHistory)), []);
+});

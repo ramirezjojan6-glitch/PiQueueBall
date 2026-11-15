@@ -1,15 +1,68 @@
 (function () {
   "use strict";
 
+  const app = window.piqueueApp;
+  const fallbackValidation = (() => {
+    function validateEmail(value) {
+      const normalizedEmail = String(value || "").trim().toLowerCase();
+      if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        return { valid: false, error: "Please enter a valid email address." };
+      }
+      return { valid: true, email: normalizedEmail };
+    }
+    function validateCredentials({ email, password, requirePassword = true }) {
+      const emailResult = validateEmail(email);
+      if (!emailResult.valid) return emailResult;
+      if (requirePassword && (typeof password !== "string" || password.length < 8)) {
+        return { valid: false, error: "Password must be at least 8 characters long." };
+      }
+      return { valid: true, email: emailResult.email, password };
+    }
+    return { validateEmail, validateCredentials };
+  })();
+  const validation = window.AuthValidation || fallbackValidation;
   const loginForm = document.getElementById("login-form");
   const signupForm = document.getElementById("signup-form");
   const status = document.getElementById("auth-status");
   const resendButton = document.getElementById("resend-confirmation");
   let confirmationEmail = "";
-  const confirmationRedirectUrl = () => new URL("login.html", window.location.href).toString();
+  const isNativeApp = () => Boolean(window.Capacitor &&
+    typeof window.Capacitor.isNativePlatform === "function" &&
+    window.Capacitor.isNativePlatform());
+  const confirmationRedirectUrl = () => {
+    if (isNativeApp()) return window.PIQUEUEBALL_SUPABASE.nativeAuthRedirectUrl;
+    const url = new URL("login.html", window.location.href);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("Open PiQueueBall through a web server before creating an account so email confirmation can return to the app.");
+    }
+    return url.toString();
+  };
+  const callbackUrl = new URL(window.location.href);
+  const callbackParams = new URLSearchParams(callbackUrl.search);
+  const callbackHash = new URLSearchParams(callbackUrl.hash.slice(1));
+  const callbackError = callbackParams.get("error_description") ||
+    callbackHash.get("error_description") ||
+    callbackParams.get("error") ||
+    callbackHash.get("error");
 
   function showError(error) {
-    status.textContent = error && error.message ? error.message : "Unable to complete that request. Please try again.";
+    const message = error && error.message ? error.message : "Unable to complete that request. Please try again.";
+    app.setError("auth", message);
+    status.textContent = message;
+  }
+
+  async function landingPage(userId) {
+    const { data: profile, error } = await app.getSupabase().from("profiles")
+      .select("profile_setup_complete")
+      .eq("id", userId)
+      .single();
+    if (error) {
+      if (/column .* does not exist|schema cache/i.test(error.message || "")) {
+        throw new Error("Run the updated supabase-setup.sql script to enable profile setup, then sign in again.");
+      }
+      throw error;
+    }
+    return profile.profile_setup_complete ? "home.html" : "profile-setup.html";
   }
 
   window.addEventListener("piqueueball:supabase-error", (event) => {
@@ -18,10 +71,15 @@
   window.addEventListener("piqueueball:auth-error", (event) => {
     status.textContent = event.detail;
   });
-  if (window.piqueueballSupabaseError) status.textContent = window.piqueueballSupabaseError;
+  if (app.getError("supabase")) status.textContent = app.getError("supabase");
+  if (callbackError) status.textContent = callbackError;
 
   window.piqueueAuth.ready.then((session) => {
     if (session) return;
+    if (callbackParams.get("email_confirmed") === "1" &&
+        !callbackError && !app.getError("auth")) {
+      status.textContent = "Email confirmed successfully. You can sign in now.";
+    }
     if (loginForm) {
       loginForm.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -29,12 +87,22 @@
         button.disabled = true;
         status.textContent = "Signing in…";
         try {
-          const { error } = await window.piqueueSupabase.auth.signInWithPassword({
-            email: document.getElementById("login-email").value.trim(),
+          const credentials = validation.validateCredentials({
+            email: document.getElementById("login-email").value,
             password: document.getElementById("login-password").value
           });
+          if (!credentials.valid) {
+            throw new Error(credentials.error);
+          }
+          if (!app.getSupabase()) {
+            throw new Error("Supabase is unavailable. Continue offline or check your internet connection.");
+          }
+          const { data, error } = await app.getSupabase().auth.signInWithPassword({
+            email: credentials.email,
+            password: credentials.password
+          });
           if (error) throw error;
-          window.location.replace("home.html");
+          window.location.replace(await landingPage(data.user.id));
         } catch (error) {
           showError(error);
           button.disabled = false;
@@ -49,23 +117,35 @@
         button.disabled = true;
         status.textContent = "Creating account…";
         try {
-          const { data, error } = await window.piqueueSupabase.auth.signUp({
-            email: document.getElementById("signup-email").value.trim(),
-            password: document.getElementById("signup-password").value,
+          if (isNativeApp() && !await window.piqueueballNativeAuthReady) {
+            throw new Error("Android email callback setup failed. Please sync and rebuild the app, then try again.");
+          }
+          const credentials = validation.validateCredentials({
+            email: document.getElementById("signup-email").value,
+            password: document.getElementById("signup-password").value
+          });
+          if (!credentials.valid) {
+            throw new Error(credentials.error);
+          }
+          if (!app.getSupabase()) {
+            throw new Error("Supabase is unavailable. Continue offline or check your internet connection.");
+          }
+          const { data, error } = await app.getSupabase().auth.signUp({
+            email: credentials.email,
+            password: credentials.password,
             options: {
-              data: { display_name: document.getElementById("signup-name").value.trim() },
               emailRedirectTo: confirmationRedirectUrl()
             }
           });
           if (error) throw error;
           if (!data.session) {
-            confirmationEmail = document.getElementById("signup-email").value.trim();
+            confirmationEmail = credentials.email;
             status.textContent = "Account created. Check your email to confirm it, then sign in. If it does not arrive, resend it.";
             resendButton.hidden = false;
             button.disabled = false;
             return;
           }
-          window.location.replace("home.html");
+          window.location.replace("profile-setup.html");
         } catch (error) {
           showError(error);
           button.disabled = false;
@@ -83,9 +163,23 @@
       resendButton.disabled = true;
       status.textContent = "Sending confirmation email…";
       try {
-        const { error } = await window.piqueueSupabase.auth.resend({
+        if (isNativeApp() && !await window.piqueueballNativeAuthReady) {
+          throw new Error("Android email callback setup failed. Please sync and rebuild the app, then try again.");
+        }
+        const emailResult = validation.validateEmail(confirmationEmail);
+        if (!emailResult.valid) {
+          throw new Error(emailResult.error);
+        }
+        const credentials = {
+          valid: true,
+          email: emailResult.email
+        };
+        if (!credentials.valid) {
+          throw new Error(credentials.error);
+        }
+        const { error } = await app.getSupabase().auth.resend({
           type: "signup",
-          email: confirmationEmail,
+          email: credentials.email,
           options: { emailRedirectTo: confirmationRedirectUrl() }
         });
         if (error) throw error;
@@ -98,5 +192,5 @@
     });
   }
 
-  if (window.piqueueballAuthError) status.textContent = window.piqueueballAuthError;
+  if (app.getError("auth")) status.textContent = app.getError("auth");
 }());

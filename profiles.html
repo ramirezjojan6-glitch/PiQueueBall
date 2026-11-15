@@ -4,14 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>My Profile · PiQueueBall</title>
-  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://buzwzmrrtcduownczmdc.supabase.co">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0" as="script" crossorigin>
+  <link rel="icon" href="assets/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="offline.js" defer></script>
   <script src="page-transitions.js" defer></script>
+  <script src="app-state.js" defer></script>
   <script src="supabase-config.js" defer></script>
   <script src="supabase-client.js" defer></script>
   <script src="auth-guard.js" defer></script>
+  <script src="capacitor-auth.js" defer></script>
   <script src="auth-ui.js" defer></script>
   <script src="profiles.js" defer></script>
 </head>
@@ -42,9 +49,23 @@
         <form id="profile-form">
           <label class="profile-field-label" for="profile-nickname">Nickname</label>
           <input class="profile-input" id="profile-nickname" maxlength="32" placeholder="Use your player name">
+          <label class="profile-field-label" for="profile-skill-level">Skill level</label>
+          <select class="profile-select" id="profile-skill-level">
+            <option value="">Not set</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Advanced Beginner">Advanced Beginner</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Pro">Pro</option>
+          </select>
           <label class="profile-field-label" for="profile-picture">Profile picture</label>
           <input class="profile-file" id="profile-picture" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
-          <p class="profile-help">PNG, JPEG, WebP, or GIF, up to 1 MB.</p>
+          <p class="profile-help">PNG, JPEG, WebP, or GIF, up to 1 MB, or choose a default avatar.</p>
+          <div class="avatar-choice-grid profile-avatar-choices" role="group" aria-label="Choose a default avatar">
+            <button class="avatar-choice" type="button" data-profile-avatar="green" aria-label="Green avatar"><span class="avatar-choice-art avatar-green"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="11" r="6"/><path d="M5 29c.8-6.1 4.7-9 11-9s10.2 2.9 11 9"/></svg></span></button>
+            <button class="avatar-choice" type="button" data-profile-avatar="sky" aria-label="Sky blue avatar"><span class="avatar-choice-art avatar-sky"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="11" r="6"/><path d="M5 29c.8-6.1 4.7-9 11-9s10.2 2.9 11 9"/></svg></span></button>
+            <button class="avatar-choice" type="button" data-profile-avatar="sun" aria-label="Sunshine avatar"><span class="avatar-choice-art avatar-sun"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="11" r="6"/><path d="M5 29c.8-6.1 4.7-9 11-9s10.2 2.9 11 9"/></svg></span></button>
+            <button class="avatar-choice" type="button" data-profile-avatar="berry" aria-label="Berry avatar"><span class="avatar-choice-art avatar-berry"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="11" r="6"/><path d="M5 29c.8-6.1 4.7-9 11-9s10.2 2.9 11 9"/></svg></span></button>
+          </div>
           <div class="profile-actions">
             <button class="btn dark start-button" type="submit">Save profile</button>
             <button class="btn secondary-button" id="remove-picture" type="button">Remove picture</button>

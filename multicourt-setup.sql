@@ -238,6 +238,7 @@ begin
   select jsonb_build_object(
     'venue', (select jsonb_build_object(
       'id', venue.id, 'name', venue.name, 'operatingMode', venue.operating_mode,
+      'createdBy', venue.created_by,
       'joinCode', case when member_role = 'admin' then venue.join_code else null end
     ) from public.court_venues as venue where venue.id = v_venue_id),
     'role', member_role,
@@ -359,7 +360,9 @@ as $$
 declare
   v_venue_id uuid;
   player_id uuid;
-  player_name text := left(trim(p_name), 80);
+  existing_player_id uuid;
+  existing_player_queued boolean;
+  player_name text := coalesce(left(trim(p_name), 80), '');
   avatar text := '';
 begin
   select member.venue_id into v_venue_id from public.court_venue_members as member
@@ -377,18 +380,48 @@ begin
     if player_name is null then raise exception 'The selected venue profile was not found.'; end if;
   end if;
   if player_name = '' then raise exception 'Enter a player name or select a venue member.'; end if;
-  if exists (select 1 from public.venue_queue_players
-    where venue_queue_players.venue_id = v_venue_id
-      and ((p_profile_id is not null and profile_id = p_profile_id)
-        or (p_profile_id is null and profile_id is null and lower(name) = lower(player_name)))) then
+  select player.id, player.is_queued into existing_player_id, existing_player_queued
+    from public.venue_queue_players as player
+    where player.venue_id = v_venue_id
+      and ((p_profile_id is not null and player.profile_id = p_profile_id)
+        or (p_profile_id is null and player.profile_id is null
+          and lower(player.name) = lower(player_name)))
+    order by player.id
+    limit 1
+    for update;
+  if existing_player_id is not null and existing_player_queued then
     raise exception 'That player is already in the shared queue.';
   end if;
+  if existing_player_id is not null and exists (
+    select 1 from public.venue_court_matches as match
+    cross join lateral jsonb_array_elements(match.teams) as team(value)
+    cross join lateral jsonb_array_elements(team.value) as participant(value)
+    where match.venue_id = v_venue_id and match.status = 'active'
+      and participant.value ->> 'id' = existing_player_id::text
+  ) then
+    raise exception 'A player cannot join the queue while playing on a court.';
+  end if;
 
-  insert into public.venue_queue_players (venue_id, profile_id, name, avatar_data_url, queue_index)
-  values (v_venue_id, p_profile_id, player_name, coalesce(avatar, ''),
-    (select coalesce(max(queue_index), -1) + 1 from public.venue_queue_players
-      where venue_queue_players.venue_id = v_venue_id))
-  returning id into player_id;
+  if existing_player_id is not null then
+    update public.venue_queue_players as player
+      set name = player_name, avatar_data_url = coalesce(avatar, ''),
+        queue_index = (select coalesce(max(queued_player.queue_index), -1) + 1
+          from public.venue_queue_players as queued_player
+          where queued_player.venue_id = v_venue_id),
+        is_queued = true, joined_queue_at = now()
+      where player.id = existing_player_id
+      returning player.id into player_id;
+  else
+    insert into public.venue_queue_players (
+      venue_id, profile_id, name, avatar_data_url, queue_index, is_queued, joined_queue_at
+    )
+    values (v_venue_id, p_profile_id, player_name, coalesce(avatar, ''),
+      (select coalesce(max(queue_index), -1) + 1
+        from public.venue_queue_players where venue_id = v_venue_id),
+      true, now())
+    returning id into player_id;
+  end if;
+  perform public.assign_available_venue_courts();
   return player_id;
 end;
 $$;
@@ -410,9 +443,9 @@ begin
     where member.user_id = auth.uid();
   if v_venue_id is null then raise exception 'Join a court venue before joining its queue.'; end if;
   perform 1 from public.court_venues as venue
-    where venue.id = v_venue_id and venue.operating_mode = 'multicourt'
+    where venue.id = v_venue_id
     for update;
-  if not found then raise exception 'The venue has not enabled Multicourt Mode yet.'; end if;
+  if not found then raise exception 'The court venue could not be found.'; end if;
   if exists (
     select 1 from public.venue_court_matches as match
     cross join lateral jsonb_array_elements(match.teams) as team(value)
@@ -611,8 +644,8 @@ begin
     from public.court_venue_members as member where member.user_id = auth.uid();
   if v_venue_id is null then raise exception 'Join a venue to assign a court match.'; end if;
   perform 1 from public.court_venues as venue
-    where venue.id = v_venue_id and venue.operating_mode = 'multicourt' for update;
-  if not found then raise exception 'Multicourt Mode is not enabled for this venue.'; end if;
+    where venue.id = v_venue_id for update;
+  if not found then raise exception 'The court venue could not be found.'; end if;
   select * into court from public.venue_courts as available_court
     where available_court.id = p_court_id and available_court.venue_id = v_venue_id
       and available_court.enabled for update;
@@ -722,7 +755,7 @@ begin
     from public.court_venue_members as member where member.user_id = auth.uid();
   if v_venue_id is null then raise exception 'Join a venue to assign court matches.'; end if;
   perform 1 from public.court_venues as venue
-    where venue.id = v_venue_id and venue.operating_mode = 'multicourt'
+    where venue.id = v_venue_id
     for update;
   if not found then return assigned_matches; end if;
 
@@ -1034,6 +1067,7 @@ grant execute on function public.join_court_venue(text) to authenticated;
 grant execute on function public.get_court_context() to authenticated;
 grant execute on function public.set_court_operating_mode(text) to authenticated;
 grant execute on function public.save_venue_court(uuid, text, text, boolean) to authenticated;
+grant execute on function public.add_venue_queue_player(uuid, text) to authenticated;
 grant execute on function public.join_venue_queue() to authenticated;
 grant execute on function public.leave_venue_queue() to authenticated;
 grant execute on function public.remove_venue_queue_player(uuid) to authenticated;

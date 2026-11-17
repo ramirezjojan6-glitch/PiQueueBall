@@ -925,7 +925,7 @@ body{
 .court-admin-panel:not([hidden])+#queue{margin-top:0}
 .queue-home-screen>#queue[hidden]{display:none}
 .court-admin-form{display:grid;gap:7px;margin-top:12px}
-.court-admin-form>label,.multicourt-admin-options>label{color:var(--green-900);font-size:.78rem;font-weight:600}
+.court-admin-form>label{color:var(--green-900);font-size:.78rem;font-weight:600}
 .court-admin-controls,.court-config-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
 .court-admin-controls input,.court-config-controls input,.court-config-controls select,.court-mode-select{
   width:100%;min-width:0;min-height:44px;padding:9px 12px;border:1px solid #dce8dc;
@@ -934,7 +934,6 @@ body{
 .court-admin-controls .btn,.court-config-controls .btn{min-height:44px}
 .court-admin-help{margin-top:7px;color:var(--muted);font-size:.75rem;line-height:1.5;overflow-wrap:anywhere}
 .court-admin-link{display:inline-flex;justify-content:center;min-height:44px;align-items:center;margin-top:8px}
-.court-mode-select{margin-top:8px}
 .multicourt-screen #venue-dashboard{display:grid;gap:13px}
 .multicourt-screen #venue-dashboard[hidden]{display:none}
 .court-config-controls{grid-template-columns:minmax(8rem,1.3fr) minmax(7rem,.8fr) auto auto}
@@ -955,7 +954,6 @@ body{
 .court-live-heading h3{min-width:0;color:var(--green-900);font-size:1rem}
 .court-live-status{min-height:2.8em;color:var(--ink);font-size:.82rem;line-height:1.5;overflow-wrap:anywhere}
 .court-live-card .start-button{margin:0}
-.multicourt-admin-options{display:grid;gap:4px;margin-top:12px}
 #venue-invite-link{display:inline-block}
 .multicourt-screen .queue-panel{margin-top:0}
 

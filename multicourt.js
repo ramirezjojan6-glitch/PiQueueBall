@@ -52,6 +52,20 @@
       match.teams.flat().some((player) => player.userId === context.currentUserId)) || null;
   }
 
+  function singleCourtQueueContainsUser() {
+    const saved = localStorage.getItem("piqueueball.queue.v1");
+    if (!saved || !context.currentUserId) return false;
+    try {
+      const state = JSON.parse(saved);
+      return Boolean(state && Array.isArray(state.players) && state.players.some((player) =>
+        player && (player.onlineId === context.currentUserId
+          || player.registeredProfileId === context.currentUserId)
+      ));
+    } catch {
+      return false;
+    }
+  }
+
   function formatWait(joinedAt) {
     const elapsed = Math.max(0, Math.floor((Date.now() - new Date(joinedAt).getTime()) / 60000));
     if (elapsed < 1) return "just joined";
@@ -118,7 +132,8 @@
     const ownQueuePlayer = currentUserQueuePlayer();
     const ownMatch = currentUserMatch();
     const joinButton = document.getElementById("join-shared-queue");
-    joinButton.hidden = Boolean(ownQueuePlayer || ownMatch);
+    const multicourtSelected = localStorage.getItem(modePreferenceKey()) === "multicourt";
+    joinButton.hidden = Boolean(ownQueuePlayer || ownMatch || !multicourtSelected);
     if (ownMatch) {
       const court = context.courts.find((entry) => entry.id === ownMatch.courtId);
       const courtName = ownMatch.courtName || court && court.name || "your assigned court";
@@ -140,6 +155,10 @@
       const position = context.players.findIndex((player) => player.id === ownQueuePlayer.id) + 1;
       playerQueueStatus.textContent = "You are in the shared queue at position " + position
         + " · " + formatWait(ownQueuePlayer.joinedAt) + ".";
+    } else if (singleCourtQueueContainsUser()) {
+      playerQueueStatus.textContent = "You are in the Single-Court roster. Remove your account from it before joining the shared queue.";
+    } else if (!multicourtSelected) {
+      playerQueueStatus.textContent = "Select Multicourt in Queue Mode on the Court Queue page before joining the shared queue.";
     } else {
       playerQueueStatus.textContent = "You are not in the shared queue. Join when you are ready to play.";
     }
@@ -227,34 +246,37 @@
 
   function render() {
     if (!context) return;
-    joinPanel.hidden = true;
-    dashboard.hidden = context.venue.operatingMode !== "multicourt";
-    if (dashboard.hidden) {
+    if (localStorage.getItem(modePreferenceKey()) !== "multicourt") {
+      dashboard.hidden = true;
       joinPanel.hidden = false;
       joinForm.hidden = true;
-      joinStatus.textContent = "This venue is in Single-Court Mode. Its venue queue and court data are preserved.";
+      joinStatus.textContent = "Select Multicourt in Queue Mode on the Court Queue page to view the shared queue.";
       return;
     }
+    joinPanel.hidden = true;
+    dashboard.hidden = false;
     joinForm.hidden = true;
 
     document.getElementById("venue-title").textContent = context.venue.name;
-    document.getElementById("venue-member-role").textContent = context.role === "admin"
+    const isVenueAdmin = context.role === "admin"
+      && context.venue.createdBy === context.currentUserId;
+    document.getElementById("venue-member-role").textContent = isVenueAdmin
       ? "Administrator"
       : "Venue member";
-    document.getElementById("court-config-panel").hidden = context.role !== "admin";
-    document.getElementById("venue-queue-tools").hidden = context.role !== "admin";
+    document.getElementById("court-config-panel").hidden = !isVenueAdmin;
+    document.getElementById("venue-queue-tools").hidden = !isVenueAdmin;
+    document.getElementById("venue-player-add-tools").hidden = !isVenueAdmin;
     renderPlayers();
     renderCourtConfig();
     renderCourts();
 
-    const modeSettings = document.getElementById("multicourt-mode-settings");
-    if (modeSettings) modeSettings.hidden = context.role !== "admin";
-    modeSelect.value = context.venue.operatingMode;
     const inviteAnchor = document.getElementById("venue-invite-link");
-    if (inviteAnchor && context.venue.joinCode) {
+    if (inviteAnchor && isVenueAdmin && context.venue.joinCode) {
       inviteAnchor.href = inviteUrl();
       inviteAnchor.textContent = "Share venue invite";
       inviteAnchor.hidden = false;
+    } else if (inviteAnchor) {
+      inviteAnchor.hidden = true;
     }
   }
 
@@ -263,7 +285,9 @@
     refreshing = true;
     try {
       const nextContext = await rpc("get_court_context");
-      if (nextContext && !Object.prototype.hasOwnProperty.call(nextContext, "currentUserId")) {
+      if (nextContext && (!Object.prototype.hasOwnProperty.call(nextContext, "currentUserId")
+        || !nextContext.venue
+        || !Object.prototype.hasOwnProperty.call(nextContext.venue, "createdBy"))) {
         throw new Error("Run the latest multicourt-setup.sql in the Supabase SQL Editor to enable player-based queues.");
       }
       context = nextContext;
@@ -301,6 +325,10 @@
 
   document.getElementById("join-shared-queue").addEventListener("click", async (event) => {
     const button = event.currentTarget;
+    if (singleCourtQueueContainsUser()) {
+      showStatus("Remove your account from the Single-Court roster before joining the shared queue.");
+      return;
+    }
     button.disabled = true;
     showStatus("");
     try {
@@ -339,6 +367,51 @@
 
   document.getElementById("cancel-court-edit").addEventListener("click", () => editCourt(null));
 
+  document.getElementById("venue-add-player-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const input = document.getElementById("venue-player-name");
+    const enteredValue = input.value.trim();
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    showStatus("");
+    try {
+      const emailAddress = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(enteredValue);
+      let profile = emailAddress
+        ? null
+        : context.members.find((member) =>
+          member.name.toLocaleLowerCase() === enteredValue.toLocaleLowerCase()) || null;
+      if (emailAddress) {
+        const { data, error } = await window.piqueueSupabase.rpc("lookup_profile_by_email", {
+          profile_email: enteredValue
+        });
+        if (error) throw error;
+        profile = Array.isArray(data) ? data[0] || null : null;
+        if (profile && !context.members.some((member) => member.id === profile.id)) {
+          throw new Error("That registered player must join this venue before you can add them.");
+        }
+      }
+
+      const playerName = profile
+        ? profile.display_name
+        : window.piqueueApp
+          ? window.piqueueApp.sanitizeText(enteredValue, { maxLength: 80, fallback: "" })
+          : enteredValue.slice(0, 80);
+      const { error } = await window.piqueueSupabase.rpc("add_venue_queue_player", {
+        p_profile_id: profile ? profile.id : null,
+        p_name: playerName
+      });
+      if (error) throw error;
+      input.value = "";
+      await refresh();
+      showStatus((profile ? profile.display_name : playerName) + " added to the shared queue.");
+    } catch (error) {
+      showStatus(error.message || "Unable to add the player.");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   document.getElementById("venue-new-session").addEventListener("click", async () => {
     if (!window.confirm("Start a new venue session? This resets queue games-played counts and round status. Match history will remain.")) return;
     try {
@@ -350,35 +423,8 @@
     }
   });
 
-  document.getElementById("back-to-single-court").addEventListener("click", async (event) => {
-    const button = event.currentTarget;
-    button.disabled = true;
-    try {
-      await rpc("leave_venue_queue");
-      localStorage.setItem(modePreferenceKey(), "single");
-      window.location.assign("home.html");
-    } catch (error) {
-      showStatus(error.message || "Unable to leave Multicourt mode.");
-      button.disabled = false;
-    }
-  });
-
-  const modeSelect = document.getElementById("multicourt-operating-mode");
-  modeSelect.addEventListener("change", async () => {
-    if (modeSelect.value !== "single") return;
-    if (!window.confirm("Switch to Single-Court Mode? Finish all active court matches first. Venue data will be kept.")) {
-      modeSelect.value = "multicourt";
-      return;
-    }
-    modeSelect.disabled = true;
-    try {
-      await rpc("set_court_operating_mode", { p_mode: "single" });
-      window.location.assign("home.html");
-    } catch (error) {
-      showStatus(error.message || "Unable to switch operating mode.");
-      modeSelect.value = "multicourt";
-      modeSelect.disabled = false;
-    }
+  document.getElementById("back-to-queue-mode").addEventListener("click", () => {
+    window.location.assign("home.html");
   });
 
   async function initialize() {

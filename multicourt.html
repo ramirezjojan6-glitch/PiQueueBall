@@ -45,7 +45,7 @@
         </div>
       </form>
       <p class="queue-status" id="join-venue-status" role="status" aria-live="polite"></p>
-      <a class="btn secondary-button court-admin-link" href="home.html">Back to Single-Court</a>
+      <a class="btn secondary-button court-admin-link" href="home.html">Choose Queue Mode</a>
     </section>
 
     <div id="venue-dashboard" hidden>
@@ -57,17 +57,10 @@
         <p class="match-message">Courts use the shared queue in order. Players who finish a match return to the end of the queue.</p>
         <p class="queue-status venue-player-status" id="player-queue-status" role="status" aria-live="polite"></p>
         <button class="btn dark start-button" id="join-shared-queue" type="button">Join shared queue</button>
-        <button class="btn secondary-button court-admin-link" id="back-to-single-court" type="button">
-          Leave Multicourt and use Single-Court
+        <button class="btn secondary-button court-admin-link" id="back-to-queue-mode" type="button">
+          Choose Queue Mode
         </button>
-        <div class="multicourt-admin-options" id="multicourt-mode-settings" hidden>
-          <label for="multicourt-operating-mode">Court Operating Mode</label>
-          <select id="multicourt-operating-mode" class="court-mode-select">
-            <option value="multicourt">Multicourt Mode</option>
-            <option value="single">Single-Court Mode (Existing System)</option>
-          </select>
-            <a id="venue-invite-link" class="court-admin-help" hidden></a>
-          </div>
+        <a id="venue-invite-link" class="court-admin-help" hidden></a>
         <p class="queue-status" id="multicourt-status" role="status" aria-live="polite"></p>
       </section>
 
@@ -94,8 +87,19 @@
 
       <section class="queue-panel" id="shared-roster-panel">
         <div class="section-heading">
-          <div><p class="eyebrow">CENTRAL QUEUE</p><h2>Players waiting</h2></div>
+          <div><p class="eyebrow">PLAYER ROSTER</p><h2>Players waiting</h2></div>
           <span class="roster-count" id="venue-roster-count">0 players</span>
+        </div>
+        <div id="venue-player-add-tools" hidden>
+          <form class="court-admin-form" id="venue-add-player-form">
+            <label for="venue-player-name">Add a player</label>
+            <div class="court-admin-controls">
+              <input id="venue-player-name" maxlength="254" autocomplete="off"
+                placeholder="Player name or venue member email" required>
+              <button class="btn dark" type="submit">Add player</button>
+            </div>
+            <p class="court-admin-help">Registered players must already be members of this venue.</p>
+          </form>
         </div>
         <div class="venue-queue-tools" id="venue-queue-tools" hidden>
           <button class="btn secondary-button" id="venue-new-session" type="button">New Session</button>

@@ -21,22 +21,41 @@
   <script src="capacitor-auth.js" defer></script>
   <script src="auth-pages.js" defer></script>
 </head>
-<body>
-  <main class="screen green">
-    <span class="circle c1"></span><span class="circle c2"></span>
-    <span class="circle c3"></span><span class="circle c4"></span>
-    <div class="signup">
-      <h2>Log in to PiQueueBall</h2>
+<body class="login-page">
+  <main class="screen green login-screen">
+    <section class="login-hero" aria-labelledby="login-headline">
+      <a class="login-brand" href="index.html" aria-label="PiQueueBall welcome page">
+        <img src="assets/logo.svg" alt="">
+        <span>PiQueueBall<small>PLAY MORE. WAIT LESS.</small></span>
+      </a>
+      <div class="login-copy">
+        <p class="login-eyebrow">YOUR COURT IS CALLING</p>
+        <h1 id="login-headline">Good games start <span>together.</span></h1>
+        <p>Find your next match, keep the rotation fair, and get back to the game.</p>
+      </div>
+      <div class="login-court-art" aria-hidden="true">
+        <img src="assets/pickleball-court.png" alt="">
+        <span class="login-ball"></span>
+        <span class="login-net"></span>
+      </div>
+    </section>
+    <section class="signup login-sheet" aria-labelledby="login-title">
+      <div class="login-sheet-heading">
+        <span class="login-sheet-kicker">WELCOME BACK</span>
+        <h2 id="login-title">Ready to play?</h2>
+        <p>Log in to pick up where you left off.</p>
+      </div>
       <form class="form-card" id="login-form">
-        <label for="login-email">Email:</label>
-        <input id="login-email" type="email" autocomplete="email" required>
-        <label for="login-password">Password:</label>
-        <input id="login-password" type="password" autocomplete="current-password" required>
+        <label for="login-email">Email address</label>
+        <input id="login-email" type="email" autocomplete="email" placeholder="you@example.com" required>
+        <label for="login-password">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
         <div class="row"><button class="btn small" type="submit">Log in</button></div>
       </form>
       <p class="queue-status" id="auth-status" role="status" aria-live="polite"></p>
-      <a class="back" href="signup.html">Need an account? Sign up</a>
-    </div>
+      <p class="login-signup">New to PiQueueBall? <a href="signup.html">Create an account</a></p>
+      <p class="login-offline"><a href="home.html?offline=1">Continue offline · save on this device</a></p>
+    </section>
   </main>
 </body>
 </html>

@@ -9,7 +9,7 @@ const vm = require("node:vm");
 const source = fs.readFileSync(path.join(__dirname, "..", "service-worker.js"), "utf8");
 
 test("offline cache version advances with app screen changes", () => {
-  assert.match(source, /const CACHE_NAME = "piqueueball-offline-v25";/);
+  assert.match(source, /const CACHE_NAME = "piqueueball-offline-v34";/);
 });
 
 test("offline precache includes shared app and queue view scripts", async () => {
@@ -41,6 +41,8 @@ test("offline precache includes shared app and queue view scripts", async () => 
   assert.ok(cachedFiles.includes("./auth-validation.js"));
   assert.ok(cachedFiles.includes("./queue-view-utils.js"));
   assert.ok(cachedFiles.includes("./assets/pickleball-court.png"));
+  assert.ok(cachedFiles.includes("./assets/loading-pickleball.svg"));
+  assert.ok(cachedFiles.includes("./index.html"));
   assert.ok(cachedFiles.includes("./multicourt.html"));
   assert.ok(cachedFiles.includes("./court-mode.js"));
   assert.ok(cachedFiles.includes("./multicourt.js"));

@@ -35,14 +35,18 @@
 
     <section class="queue-panel" id="join-venue-panel" hidden>
       <div class="section-heading">
-        <div><p class="eyebrow">SHARED VENUE</p><h2>Join a court venue</h2></div>
+        <div><p class="eyebrow">SHARED QUEUE</p><h2>Find your group's queue</h2></div>
       </div>
       <form class="court-admin-form" id="join-venue-form">
-        <label for="venue-join-code">Venue join code</label>
+        <label for="venue-join-query">Queue code or party name</label>
         <div class="court-admin-controls">
-          <input id="venue-join-code" maxlength="8" autocomplete="one-time-code" required>
-          <button class="btn dark" type="submit">Join venue</button>
+          <input id="venue-join-query" maxlength="80" autocomplete="off"
+            placeholder="Enter an invite code or group name" required>
+          <button class="btn dark" type="submit">Join Queue</button>
         </div>
+        <p class="court-admin-help">Enter a code, or search for your party by name.</p>
+        <ul class="court-config-list venue-search-results" id="venue-search-results"
+          aria-label="Matching shared queues" hidden></ul>
       </form>
       <p class="queue-status" id="join-venue-status" role="status" aria-live="polite"></p>
       <a class="btn secondary-button court-admin-link" href="home.html">Choose Queue Mode</a>
@@ -51,12 +55,18 @@
     <div id="venue-dashboard" hidden>
       <section class="queue-panel multicourt-intro">
         <div class="section-heading">
-          <div><p class="eyebrow">MULTICOURT MODE</p><h2 id="venue-title">Venue</h2></div>
-          <span class="match-format" id="venue-member-role"></span>
+          <div><p class="eyebrow">MULTICOURT LOBBY</p><h2 id="venue-title">Lobby</h2></div>
         </div>
-        <p class="match-message">Courts use the shared queue in order. Players who finish a match return to the end of the queue.</p>
+        <form class="court-admin-form" id="venue-name-form">
+          <label for="venue-lobby-name">Party / lobby name</label>
+          <div class="court-admin-controls">
+            <input id="venue-lobby-name" maxlength="80" required>
+            <button class="btn secondary-button" type="submit">Save Name</button>
+          </div>
+        </form>
+        <p class="match-message">Courts use the lobby queue in order. Players who finish a match return to the end of the queue.</p>
         <p class="queue-status venue-player-status" id="player-queue-status" role="status" aria-live="polite"></p>
-        <button class="btn dark start-button" id="join-shared-queue" type="button">Join shared queue</button>
+        <button class="btn dark start-button" id="join-shared-queue" type="button">Start Match</button>
         <button class="btn secondary-button court-admin-link" id="back-to-queue-mode" type="button">
           Choose Queue Mode
         </button>
@@ -66,7 +76,7 @@
 
       <section class="queue-panel" id="court-config-panel" hidden>
         <div class="section-heading">
-          <div><p class="eyebrow">ADMINISTRATION</p><h2>Manage courts</h2></div>
+          <div><p class="eyebrow">COURT MANAGEMENT</p><h2>Manage courts</h2></div>
         </div>
         <form class="court-admin-form" id="court-form">
           <input id="court-edit-id" type="hidden">
@@ -104,8 +114,8 @@
         <div class="venue-queue-tools" id="venue-queue-tools" hidden>
           <button class="btn secondary-button" id="venue-new-session" type="button">New Session</button>
         </div>
-        <ul class="player-list venue-player-list" id="venue-player-list" aria-label="Shared venue queue"></ul>
-        <p class="empty-roster" id="venue-empty-roster" hidden>No players in the shared queue yet.</p>
+        <ul class="player-list venue-player-list" id="venue-player-list" aria-label="Lobby queue roster"></ul>
+        <p class="empty-roster" id="venue-empty-roster" hidden>No players in the lobby queue yet.</p>
       </section>
 
       <section class="queue-panel" aria-labelledby="courts-heading">
@@ -118,8 +128,7 @@
 
     <nav class="nav" aria-label="Main">
       <a class="active" href="multicourt.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Courts</a>
-      <a href="totals.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11h4v9m4 0V4h4v16m4 0v-6h4v6M2 20h20"/></svg>Totals</a>
-      <a href="results.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H5V3zm8 1v4h4m-10 4h8m-8 4h5"/></svg>Results</a>
+      <a href="results.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H5V3zm8 1v4h4m-10 4h8m-8 4h5"/></svg>History</a>
       <a href="profiles.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profiles</a>
       <a href="friends.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7-7.5a4 4 0 0 1 0 7.8M20 15a4 4 0 0 1 2 3.5V21"/></svg>Friends</a>
     </nav>

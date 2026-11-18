@@ -3,36 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#174b32">
   <title>PiQueueBall</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="preconnect" href="https://buzwzmrrtcduownczmdc.supabase.co">
-  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0" as="script" crossorigin>
   <link rel="icon" href="assets/logo.svg">
+  <link rel="preload" href="assets/loading-pickleball.svg" as="image" type="image/svg+xml">
   <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="offline.js" defer></script>
-  <script src="page-transitions.js" defer></script>
-  <script src="app-state.js" defer></script>
-  <script src="supabase-config.js" defer></script>
-  <script src="supabase-client.js" defer></script>
-  <script src="auth-guard.js" defer></script>
-  <script src="capacitor-auth.js" defer></script>
-  <script src="auth-pages.js" defer></script>
 </head>
-<body>
-  <main class="screen green">
-    <span class="circle c1"></span><span class="circle c2"></span>
-    <span class="circle c3"></span><span class="circle c4"></span>
-    <div class="welcome">
-      <img src="assets/logo.svg" alt="PQB logo">
-      <h1>Welcome to PiQueueBall</h1>
-      <a class="btn" href="signup.html">Create account</a>
-      <a class="welcome-login" href="login.html">Already have an account? Log in</a>
-      <a class="welcome-login" href="home.html?offline=1">Continue offline · save on this device</a>
-      <p class="queue-status" id="auth-status" role="status" aria-live="polite"></p>
+<body class="loading-page">
+  <main class="splash-screen" aria-label="Loading PiQueueBall">
+    <div class="splash-content">
+      <img class="splash-logo" src="assets/logo.svg" alt="PiQueueBall">
+      <p class="splash-kicker">YOUR COURT IS CALLING</p>
+      <h1>Let's get on court.</h1>
+      <img class="splash-play-icon" src="assets/loading-pickleball.svg"
+        alt="A pickleball flying past a paddle with a white trail">
+      <p class="splash-status" role="status" aria-live="polite">Getting your court ready...</p>
+      <span class="splash-progress" aria-hidden="true"><span></span></span>
+      <noscript><a class="splash-fallback" href="login.html">Continue to log in</a></noscript>
     </div>
   </main>
+  <script>
+    window.setTimeout(function () {
+      document.body.classList.add("splash-leaving");
+    }, 2250);
+    window.setTimeout(function () {
+      window.location.replace("login.html");
+    }, 2500);
+  </script>
 </body>
 </html>

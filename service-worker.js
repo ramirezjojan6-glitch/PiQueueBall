@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "piqueueball-offline-v25";
+const CACHE_NAME = "piqueueball-offline-v34";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -38,6 +38,7 @@ const APP_FILES = [
   "./profiles.js",
   "./friends.js",
   "./assets/logo.svg",
+  "./assets/loading-pickleball.svg",
   "./assets/pickleball-court.png"
 ];
 

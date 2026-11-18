@@ -15,11 +15,17 @@ create table if not exists public.court_venues (
 create table if not exists public.court_venue_members (
   venue_id uuid not null references public.court_venues (id) on delete cascade,
   user_id uuid not null references public.profiles (id) on delete cascade,
-  role text not null check (role in ('admin', 'member')),
+  role text not null default 'member' check (role = 'member'),
   joined_at timestamptz not null default now(),
   primary key (venue_id, user_id),
   unique (user_id)
 );
+
+alter table public.court_venue_members
+  drop constraint if exists court_venue_members_role_check;
+update public.court_venue_members set role = 'member' where role <> 'member';
+alter table public.court_venue_members
+  add constraint court_venue_members_role_check check (role = 'member');
 
 create table if not exists public.venue_courts (
   id uuid primary key default gen_random_uuid(),
@@ -102,18 +108,7 @@ as $$
   );
 $$;
 
-create or replace function public.is_court_venue_admin(p_venue_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select exists (
-    select 1 from public.court_venue_members
-    where venue_id = p_venue_id and user_id = auth.uid() and role = 'admin'
-  );
-$$;
+drop function if exists public.is_court_venue_admin(uuid);
 
 drop policy if exists "Users can view their court admin status" on public.court_system_admins;
 create policy "Users can view their court admin status"
@@ -155,7 +150,7 @@ as $$
   );
 $$;
 
-create or replace function public.create_court_venue(p_name text)
+create or replace function public.create_court_lobby(p_name text, p_court_count integer)
 returns jsonb
 language plpgsql
 security definer
@@ -164,14 +159,18 @@ as $$
 declare
   new_venue_id uuid;
   new_join_code text;
+  court_number integer;
   clean_name text := left(trim(p_name), 80);
 begin
-  if auth.uid() is null then raise exception 'Sign in to create a court venue.'; end if;
-  if clean_name = '' then
-    raise exception 'Enter a venue name.';
+  if auth.uid() is null then raise exception 'Sign in to create a lobby.'; end if;
+  if clean_name is null or clean_name = '' then
+    raise exception 'Enter a party or lobby name.';
+  end if;
+  if p_court_count is null or p_court_count < 1 or p_court_count > 20 then
+    raise exception 'Choose between 1 and 20 courts for the lobby.';
   end if;
   if exists (select 1 from public.court_venue_members where user_id = auth.uid()) then
-    raise exception 'This account already belongs to a court venue.';
+    raise exception 'This account already belongs to a shared queue.';
   end if;
 
   loop
@@ -183,12 +182,101 @@ begin
   values (clean_name, new_join_code, auth.uid(), 'multicourt')
   returning id into new_venue_id;
   insert into public.court_venue_members (venue_id, user_id, role)
-  values (new_venue_id, auth.uid(), 'admin');
-  insert into public.venue_courts (venue_id, name, mode, queue_index)
-  values (new_venue_id, 'Court 1', 'doubles', 0);
+  values (new_venue_id, auth.uid(), 'member');
+  for court_number in 1..p_court_count loop
+    insert into public.venue_courts (venue_id, name, mode, queue_index)
+    values (new_venue_id, 'Court ' || court_number, 'doubles', court_number - 1);
+  end loop;
 
   return jsonb_build_object('id', new_venue_id, 'name', clean_name,
-    'join_code', new_join_code, 'operating_mode', 'multicourt');
+    'join_code', new_join_code, 'operating_mode', 'multicourt',
+    'court_count', p_court_count);
+end;
+$$;
+
+create or replace function public.create_court_venue(p_name text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  return public.create_court_lobby(p_name, 1);
+end;
+$$;
+
+create or replace function public.rename_court_lobby(p_name text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_venue_id uuid;
+  clean_name text := left(trim(p_name), 80);
+begin
+  if auth.uid() is null then raise exception 'Sign in to rename this lobby.'; end if;
+  if clean_name is null or clean_name = '' then
+    raise exception 'Enter a party or lobby name.';
+  end if;
+  select member.venue_id into v_venue_id from public.court_venue_members as member
+    where member.user_id = auth.uid();
+  if v_venue_id is null then raise exception 'Join a shared queue to rename its lobby.'; end if;
+  perform 1 from public.court_venues as venue where venue.id = v_venue_id for update;
+  update public.court_venues as venue set name = clean_name where venue.id = v_venue_id;
+end;
+$$;
+
+create or replace function public.search_court_venues(p_search text)
+returns table (venue_id uuid, venue_name text, waiting_count bigint)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  clean_search text := left(trim(p_search), 80);
+begin
+  if auth.uid() is null then raise exception 'Sign in to find a shared queue.'; end if;
+  if clean_search is null or char_length(clean_search) < 2 then
+    raise exception 'Enter at least 2 characters of the party name.';
+  end if;
+  return query
+    select venue.id, venue.name,
+      (select count(*) from public.venue_queue_players as player
+        where player.venue_id = venue.id and player.is_queued)
+    from public.court_venues as venue
+    where venue.operating_mode = 'multicourt'
+      and position(lower(clean_search) in lower(venue.name)) > 0
+    order by (lower(venue.name) = lower(clean_search)) desc, venue.name, venue.created_at desc
+    limit 20;
+end;
+$$;
+
+create or replace function public.join_court_venue_by_id(p_venue_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_venue_id uuid;
+  current_venue_id uuid;
+begin
+  if auth.uid() is null then raise exception 'Sign in to join a shared queue.'; end if;
+  select venue.id into target_venue_id from public.court_venues as venue
+    where venue.id = p_venue_id and venue.operating_mode = 'multicourt';
+  if target_venue_id is null then raise exception 'That shared queue was not found.'; end if;
+
+  select member.venue_id into current_venue_id from public.court_venue_members as member
+    where member.user_id = auth.uid();
+  if current_venue_id is not null and current_venue_id <> target_venue_id then
+    raise exception 'This account already belongs to another shared queue.';
+  end if;
+  insert into public.court_venue_members (venue_id, user_id, role)
+  values (target_venue_id, auth.uid(), 'member')
+  on conflict (venue_id, user_id) do nothing;
+  return target_venue_id;
 end;
 $$;
 
@@ -200,22 +288,13 @@ set search_path = ''
 as $$
 declare
   target_venue_id uuid;
-  current_venue_id uuid;
 begin
-  if auth.uid() is null then raise exception 'Sign in to join a court venue.'; end if;
-  select id into target_venue_id from public.court_venues
-    where join_code = upper(trim(p_join_code));
+  if auth.uid() is null then raise exception 'Sign in to join a shared queue.'; end if;
+  select venue.id into target_venue_id from public.court_venues as venue
+    where venue.join_code = upper(trim(p_join_code))
+      and venue.operating_mode = 'multicourt';
   if target_venue_id is null then raise exception 'That venue join code was not found.'; end if;
-
-  select venue_id into current_venue_id from public.court_venue_members
-    where user_id = auth.uid();
-  if current_venue_id is not null and current_venue_id <> target_venue_id then
-    raise exception 'This account already belongs to another court venue.';
-  end if;
-  insert into public.court_venue_members (venue_id, user_id, role)
-  values (target_venue_id, auth.uid(), 'member')
-  on conflict (venue_id, user_id) do nothing;
-  return target_venue_id;
+  return public.join_court_venue_by_id(target_venue_id);
 end;
 $$;
 
@@ -228,10 +307,9 @@ set search_path = ''
 as $$
 declare
   v_venue_id uuid;
-  member_role text;
   response jsonb;
 begin
-  select member.venue_id, member.role into v_venue_id, member_role
+  select member.venue_id into v_venue_id
   from public.court_venue_members as member where member.user_id = auth.uid();
   if v_venue_id is null then return null; end if;
 
@@ -239,9 +317,8 @@ begin
     'venue', (select jsonb_build_object(
       'id', venue.id, 'name', venue.name, 'operatingMode', venue.operating_mode,
       'createdBy', venue.created_by,
-      'joinCode', case when member_role = 'admin' then venue.join_code else null end
+      'joinCode', venue.join_code
     ) from public.court_venues as venue where venue.id = v_venue_id),
-    'role', member_role,
     'currentUserId', auth.uid(),
     'courts', coalesce((select jsonb_agg(jsonb_build_object(
       'id', court.id, 'name', court.name, 'mode', court.mode,
@@ -287,8 +364,8 @@ declare
 begin
   if p_mode not in ('single', 'multicourt') then raise exception 'Choose a valid court operating mode.'; end if;
   select member.venue_id into v_venue_id from public.court_venue_members as member
-    where member.user_id = auth.uid() and member.role = 'admin';
-  if v_venue_id is null then raise exception 'Only a venue administrator can change the operating mode.'; end if;
+    where member.user_id = auth.uid();
+  if v_venue_id is null then raise exception 'Join a shared queue to change its operating mode.'; end if;
   perform 1 from public.court_venues as venue where venue.id = v_venue_id for update;
   if p_mode = 'single' and exists (
     select 1 from public.venue_court_matches as active_match
@@ -320,8 +397,8 @@ declare
   clean_name text := left(trim(p_name), 40);
 begin
   select member.venue_id into v_venue_id from public.court_venue_members as member
-    where member.user_id = auth.uid() and member.role = 'admin';
-  if v_venue_id is null then raise exception 'Only a venue administrator can configure courts.'; end if;
+    where member.user_id = auth.uid();
+  if v_venue_id is null then raise exception 'Join a shared queue to configure its courts.'; end if;
   perform 1 from public.court_venues as venue where venue.id = v_venue_id for update;
   if clean_name = '' or p_mode not in ('singles', 'doubles') then
     raise exception 'Enter a court name and select Singles or Doubles.';
@@ -351,6 +428,32 @@ begin
 end;
 $$;
 
+create or replace function public.delete_venue_court(p_court_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_venue_id uuid;
+begin
+  select member.venue_id into v_venue_id from public.court_venue_members as member
+    where member.user_id = auth.uid();
+  if v_venue_id is null then raise exception 'Join a shared queue to manage its courts.'; end if;
+  perform 1 from public.court_venues as venue where venue.id = v_venue_id for update;
+  if not found then raise exception 'The court lobby could not be found.'; end if;
+  perform 1 from public.venue_courts as court
+    where court.id = p_court_id and court.venue_id = v_venue_id for update;
+  if not found then raise exception 'Court not found in your lobby.'; end if;
+  if exists (select 1 from public.venue_court_matches
+    where court_id = p_court_id and status = 'active') then
+    raise exception 'Finish the active match before deleting this court.';
+  end if;
+  delete from public.venue_courts as court
+    where court.id = p_court_id and court.venue_id = v_venue_id;
+end;
+$$;
+
 create or replace function public.add_venue_queue_player(p_profile_id uuid, p_name text)
 returns uuid
 language plpgsql
@@ -366,8 +469,8 @@ declare
   avatar text := '';
 begin
   select member.venue_id into v_venue_id from public.court_venue_members as member
-    where member.user_id = auth.uid() and member.role = 'admin';
-  if v_venue_id is null then raise exception 'Only a venue administrator can manage the shared queue.'; end if;
+    where member.user_id = auth.uid();
+  if v_venue_id is null then raise exception 'Join a shared queue to manage its players.'; end if;
   perform 1 from public.court_venues as venue where venue.id = v_venue_id for update;
   if p_profile_id is not null then
     if not exists (select 1 from public.court_venue_members
@@ -531,8 +634,8 @@ declare
   v_venue_id uuid;
 begin
   select member.venue_id into v_venue_id from public.court_venue_members as member
-    where member.user_id = auth.uid() and member.role = 'admin';
-  if v_venue_id is null then raise exception 'Only a venue administrator can manage the shared queue.'; end if;
+    where member.user_id = auth.uid();
+  if v_venue_id is null then raise exception 'Join a shared queue to manage its players.'; end if;
   perform 1 from public.court_venues as venue where venue.id = v_venue_id for update;
   if exists (
     select 1 from public.venue_court_matches as match
@@ -559,8 +662,8 @@ declare
   v_venue_id uuid;
 begin
   select member.venue_id into v_venue_id from public.court_venue_members as member
-    where member.user_id = auth.uid() and member.role = 'admin';
-  if v_venue_id is null then raise exception 'Only a venue administrator can start a new session.'; end if;
+    where member.user_id = auth.uid();
+  if v_venue_id is null then raise exception 'Join a shared queue to start a new session.'; end if;
   perform 1 from public.court_venues as venue where venue.id = v_venue_id for update;
   if exists (select 1 from public.venue_court_matches
     where venue_court_matches.venue_id = v_venue_id and status = 'active') then
@@ -585,8 +688,8 @@ declare
   eligible_count integer;
 begin
   select member.venue_id into v_venue_id from public.court_venue_members as member
-    where member.user_id = auth.uid() and member.role = 'admin';
-  if v_venue_id is null then raise exception 'Only a venue administrator can jumble the shared queue.'; end if;
+    where member.user_id = auth.uid();
+  if v_venue_id is null then raise exception 'Join a shared queue to jumble its players.'; end if;
   perform 1 from public.court_venues as venue where venue.id = v_venue_id for update;
   if exists (select 1 from public.venue_court_matches
     where venue_court_matches.venue_id = v_venue_id and status = 'active') then
@@ -1037,13 +1140,17 @@ end;
 $$;
 
 revoke all on function public.is_court_venue_member(uuid) from public, anon;
-revoke all on function public.is_court_venue_admin(uuid) from public, anon;
 revoke all on function public.is_court_system_admin() from public, anon;
+revoke all on function public.create_court_lobby(text, integer) from public, anon;
 revoke all on function public.create_court_venue(text) from public, anon;
+revoke all on function public.rename_court_lobby(text) from public, anon;
+revoke all on function public.search_court_venues(text) from public, anon;
+revoke all on function public.join_court_venue_by_id(uuid) from public, anon;
 revoke all on function public.join_court_venue(text) from public, anon;
 revoke all on function public.get_court_context() from public, anon;
 revoke all on function public.set_court_operating_mode(text) from public, anon;
 revoke all on function public.save_venue_court(uuid, text, text, boolean) from public, anon;
+revoke all on function public.delete_venue_court(uuid) from public, anon;
 revoke all on function public.add_venue_queue_player(uuid, text) from public, anon;
 revoke all on function public.add_venue_queue_player(uuid, text) from authenticated;
 revoke all on function public.join_venue_queue() from public, anon;
@@ -1060,13 +1167,17 @@ revoke all on function public.save_court_match_score(uuid, integer, jsonb) from 
 revoke all on function public.finish_court_match(uuid, integer, jsonb) from public, anon;
 
 grant execute on function public.is_court_venue_member(uuid) to authenticated;
-grant execute on function public.is_court_venue_admin(uuid) to authenticated;
 grant execute on function public.is_court_system_admin() to authenticated;
+grant execute on function public.create_court_lobby(text, integer) to authenticated;
 grant execute on function public.create_court_venue(text) to authenticated;
+grant execute on function public.rename_court_lobby(text) to authenticated;
+grant execute on function public.search_court_venues(text) to authenticated;
+grant execute on function public.join_court_venue_by_id(uuid) to authenticated;
 grant execute on function public.join_court_venue(text) to authenticated;
 grant execute on function public.get_court_context() to authenticated;
 grant execute on function public.set_court_operating_mode(text) to authenticated;
 grant execute on function public.save_venue_court(uuid, text, text, boolean) to authenticated;
+grant execute on function public.delete_venue_court(uuid) to authenticated;
 grant execute on function public.add_venue_queue_player(uuid, text) to authenticated;
 grant execute on function public.join_venue_queue() to authenticated;
 grant execute on function public.leave_venue_queue() to authenticated;

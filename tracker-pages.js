@@ -5,10 +5,7 @@
   const HISTORY_PAGE_SIZE = 25;
   const status = document.getElementById("tracker-status");
   let resultsPage = 0;
-  let queueHistoryPage = 0;
   let sortedResults = [];
-  let sortedQueues = [];
-  let resultsByQueue = new Map();
   let currentUserId = null;
   const deleteHistoryOffline = () => !navigator.onLine
     || localStorage.getItem("piqueueball.offline.v1") === "true";
@@ -58,11 +55,6 @@
 
   function prepareHistory(state) {
     sortedResults = state.results.slice().reverse();
-    sortedQueues = state.queueHistory.slice()
-      .sort((first, second) => second.startedAt.localeCompare(first.startedAt));
-    resultsByQueue = new Map(state.results.flatMap((match) =>
-      [[match.queueId, match], [match.id, match]]
-    ));
   }
 
   function formattedDate(value) {
@@ -179,7 +171,6 @@
     prepareHistory(state);
     if (document.getElementById("player-stats")) renderStats(state);
     if (document.getElementById("results-list")) renderResults(state);
-    if (document.getElementById("queue-history-list")) renderQueueHistory(state);
   }
 
   async function deletePlayerHistory(stat, state) {
@@ -364,74 +355,6 @@
     });
   }
 
-  function renderQueueHistory(state) {
-    const list = document.getElementById("queue-history-list");
-    const empty = document.getElementById("empty-queue-history");
-    const count = document.getElementById("queue-history-count");
-    list.replaceChildren();
-
-    const pageCount = Math.ceil(sortedQueues.length / HISTORY_PAGE_SIZE);
-    queueHistoryPage = Math.min(queueHistoryPage, Math.max(0, pageCount - 1));
-    const pageStart = queueHistoryPage * HISTORY_PAGE_SIZE;
-    sortedQueues.slice(pageStart, pageStart + HISTORY_PAGE_SIZE).forEach((queue) => {
-      const result = resultsByQueue.get(queue.resultId) || resultsByQueue.get(queue.id);
-      const item = document.createElement("li");
-      item.className = "queue-history-item";
-      const details = document.createElement("details");
-      const summary = document.createElement("summary");
-      const title = document.createElement("span");
-      title.className = "queue-history-title";
-      title.textContent = formattedDate(queue.startedAt);
-      const status = document.createElement("span");
-      status.className = result ? "queue-history-state completed" : "queue-history-state";
-      status.textContent = result ? "Completed" : "In progress";
-      summary.append(title, status);
-
-      const content = document.createElement("div");
-      content.className = "queue-history-details";
-      const format = document.createElement("p");
-      format.className = "queue-history-meta";
-      format.textContent = (queue.mode === "doubles" ? "Doubles" : "Singles")
-        + " · " + queue.players.length + (queue.players.length === 1 ? " player" : " players");
-      const rosterLabel = document.createElement("strong");
-      rosterLabel.textContent = "Players in this queue";
-      const roster = document.createElement("p");
-      roster.className = "queue-history-roster";
-      roster.textContent = queue.players.map((player) => player.name).join(", ");
-      content.append(format, rosterLabel, roster);
-
-      queue.teams.forEach((team, index) => {
-        const side = document.createElement("p");
-        side.className = "queue-history-side";
-        const teamLabel = queue.mode === "doubles" ? "Team " : "Player ";
-        side.textContent = teamLabel + (index + 1) + ": " + resultTeamName(team);
-        if (result) side.textContent += " — " + result.scores[index];
-        content.append(side);
-      });
-      if (result) {
-        const winner = document.createElement("p");
-        winner.className = "result-winner";
-        winner.textContent = "Winner: " + resultTeamName(result.teams[result.winner]);
-        const completionDate = document.createElement("time");
-        completionDate.className = "queue-history-meta";
-        completionDate.dateTime = result.completedAt;
-        completionDate.textContent = "Completed " + formattedDate(result.completedAt);
-        content.append(winner, completionDate);
-      }
-
-      details.append(summary, content);
-      item.append(details);
-      list.append(item);
-    });
-
-    count.textContent = state.queueHistory.length + (state.queueHistory.length === 1 ? " queue" : " queues");
-    empty.hidden = state.queueHistory.length > 0;
-    renderPagination("queue-history-pagination", sortedQueues.length, queueHistoryPage, (page) => {
-      queueHistoryPage = page;
-      renderQueueHistory(state);
-    });
-  }
-
   function mergeOnlineHistory(state, records) {
     const cloudResults = records.map((record) => {
       const participants = record.match_players || [];
@@ -478,7 +401,6 @@
     mergeOnlineHistory(state, records || []);
     if (document.getElementById("player-stats")) renderStats(state);
     if (document.getElementById("results-list")) renderResults(state);
-    if (document.getElementById("queue-history-list")) renderQueueHistory(state);
   }
 
   const state = readState();
@@ -486,7 +408,6 @@
   prepareHistory(state);
   if (document.getElementById("player-stats")) renderStats(state);
   if (document.getElementById("results-list")) renderResults(state);
-  if (document.getElementById("queue-history-list")) renderQueueHistory(state);
   function refreshOnlineHistory(event) {
     const session = event.detail && event.detail.session;
     if (session) loadOnlineHistory(state, session).catch((error) => {
@@ -499,31 +420,6 @@
   }).catch((error) => {
     if (status) status.textContent = error.message || "Unable to load online match history.";
   });
-
-  const exportButton = document.getElementById("export-data");
-  if (exportButton) {
-    exportButton.addEventListener("click", () => {
-      try {
-        const savedState = localStorage.getItem(STORAGE_KEY);
-        if (!savedState) throw new Error("No saved device data is available to export.");
-        const data = JSON.stringify({
-          exportedAt: new Date().toISOString(),
-          deviceData: JSON.parse(savedState)
-        }, null, 2);
-        const downloadUrl = URL.createObjectURL(new Blob([data], { type: "application/json" }));
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        link.download = "piqueueball-device-data-" + new Date().toISOString().slice(0, 10) + ".json";
-        document.body.append(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(downloadUrl);
-        if (status) status.textContent = "Device data exported.";
-      } catch (error) {
-        if (status) status.textContent = error.message || "Unable to export device data.";
-      }
-    });
-  }
 
   const syncReviewMessage = document.getElementById("sync-review-message");
   const claimOfflineSyncButton = document.getElementById("claim-offline-sync");

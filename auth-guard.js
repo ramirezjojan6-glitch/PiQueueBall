@@ -80,7 +80,7 @@
       if (!client) return;
       const { error } = await client.auth.signOut();
       if (error) throw error;
-      window.location.replace("index.html");
+      window.location.replace("login.html");
     }
   };
 }());

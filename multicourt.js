@@ -8,6 +8,7 @@
   const venueStatus = document.getElementById("multicourt-status");
   const playerQueueStatus = document.getElementById("player-queue-status");
   const courtForm = document.getElementById("court-form");
+  const venueNameForm = document.getElementById("venue-name-form");
   const statusArea = venueStatus;
   let context = null;
   let currentUserId = null;
@@ -43,6 +44,55 @@
     return invite.toString();
   }
 
+  function renderVenueSearchResults(venues) {
+    const list = document.getElementById("venue-search-results");
+    list.replaceChildren();
+    list.hidden = venues.length === 0;
+    venues.forEach((venue) => {
+      const item = document.createElement("li");
+      const details = document.createElement("span");
+      details.textContent = venue.venue_name + " · " + venue.waiting_count + " waiting";
+      const button = document.createElement("button");
+      button.className = "btn secondary-button";
+      button.type = "button";
+      button.textContent = "Join Queue";
+      button.setAttribute("aria-label", "Join " + venue.venue_name + " queue");
+      button.addEventListener("click", async () => {
+        const submit = joinForm.querySelector('button[type="submit"]');
+        button.disabled = true;
+        submit.disabled = true;
+        joinStatus.textContent = "";
+        try {
+          if (singleCourtQueueContainsUser()) {
+            throw new Error("Remove your account from the Single-Court roster before joining the shared queue.");
+          }
+          await joinVenueAndQueue("join_court_venue_by_id", { p_venue_id: venue.venue_id });
+        } catch (error) {
+          const message = error.message || "Unable to join the shared queue.";
+          if (context) showStatus(message);
+          else joinStatus.textContent = message;
+          button.disabled = false;
+          submit.disabled = false;
+        }
+      });
+      item.append(details, button);
+      list.append(item);
+    });
+  }
+
+  async function joinVenueAndQueue(rpcName, args) {
+    await rpc(rpcName, args);
+    localStorage.setItem(modePreferenceKey(), "multicourt");
+    try {
+      await rpc("join_venue_queue");
+    } catch (error) {
+      await refresh();
+      throw error;
+    }
+    await refresh();
+    showStatus("You joined the shared queue. Courts are assigned automatically.");
+  }
+
   function currentUserQueuePlayer() {
     return context.players.find((player) => player.profileId === context.currentUserId) || null;
   }
@@ -54,12 +104,12 @@
 
   function singleCourtQueueContainsUser() {
     const saved = localStorage.getItem("piqueueball.queue.v1");
-    if (!saved || !context.currentUserId) return false;
+    if (!saved || !currentUserId) return false;
     try {
       const state = JSON.parse(saved);
       return Boolean(state && Array.isArray(state.players) && state.players.some((player) =>
-        player && (player.onlineId === context.currentUserId
-          || player.registeredProfileId === context.currentUserId)
+        player && (player.onlineId === currentUserId
+          || player.registeredProfileId === currentUserId)
       ));
     } catch {
       return false;
@@ -104,28 +154,25 @@
         item.append(avatar);
       }
       item.append(details);
-      if (context.role === "admin") {
-        const remove = document.createElement("button");
-        remove.className = "remove-player";
-        remove.type = "button";
-        remove.textContent = "Remove";
-        remove.setAttribute("aria-label", "Remove " + player.name + " from the venue queue");
-        remove.disabled = false;
-        remove.title = "Remove player from the shared queue.";
-        remove.addEventListener("click", async () => {
-          if (!window.confirm("Remove " + player.name + " from the shared queue? Their match history will remain.")) return;
-          remove.disabled = true;
-          try {
-            await rpc("remove_venue_queue_player", { p_player_id: player.id });
-            await refresh();
-            showStatus(player.name + " was removed from the queue. Match history was kept.");
-          } catch (error) {
-            showStatus(error.message || "Unable to remove the player.");
-            remove.disabled = false;
-          }
-        });
-        item.append(remove);
-      }
+      const remove = document.createElement("button");
+      remove.className = "remove-player";
+      remove.type = "button";
+      remove.textContent = "Remove";
+      remove.setAttribute("aria-label", "Remove " + player.name + " from the venue queue");
+      remove.title = "Remove player from the shared queue.";
+      remove.addEventListener("click", async () => {
+        if (!window.confirm("Remove " + player.name + " from the shared queue? Their match history will remain.")) return;
+        remove.disabled = true;
+        try {
+          await rpc("remove_venue_queue_player", { p_player_id: player.id });
+          await refresh();
+          showStatus(player.name + " was removed from the queue. Match history was kept.");
+        } catch (error) {
+          showStatus(error.message || "Unable to remove the player.");
+          remove.disabled = false;
+        }
+      });
+      item.append(remove);
       list.append(item);
     });
 
@@ -160,7 +207,7 @@
     } else if (!multicourtSelected) {
       playerQueueStatus.textContent = "Select Multicourt in Queue Mode on the Court Queue page before joining the shared queue.";
     } else {
-      playerQueueStatus.textContent = "You are not in the shared queue. Join when you are ready to play.";
+      playerQueueStatus.textContent = "You're in the lobby. Start Match to join the queue; courts assign matches automatically.";
     }
   }
 
@@ -182,13 +229,40 @@
       const details = document.createElement("span");
       details.textContent = court.name + " · " + (court.mode === "doubles" ? "Doubles" : "Singles")
         + (court.enabled ? "" : " · Inactive");
+      const actions = document.createElement("div");
+      actions.className = "court-config-actions";
+      const activeMatch = Boolean(activeMatchForCourt(court.id));
       const edit = document.createElement("button");
       edit.className = "btn secondary-button";
       edit.type = "button";
       edit.textContent = "Edit";
-      edit.disabled = Boolean(activeMatchForCourt(court.id));
+      edit.disabled = activeMatch;
       edit.addEventListener("click", () => editCourt(court));
-      item.append(details, edit);
+      const remove = document.createElement("button");
+      remove.className = "btn secondary-button court-delete-button";
+      remove.type = "button";
+      remove.textContent = "Delete";
+      remove.setAttribute("aria-label", activeMatch
+        ? "Cannot delete " + court.name + " while its match is active"
+        : "Delete " + court.name);
+      remove.disabled = activeMatch;
+      if (activeMatch) remove.title = "Finish the active match before deleting this court.";
+      remove.addEventListener("click", async () => {
+        if (!window.confirm("Delete " + court.name + "? Saved match results will remain in History.")) return;
+        remove.disabled = true;
+        showStatus("");
+        try {
+          await rpc("delete_venue_court", { p_court_id: court.id });
+          if (document.getElementById("court-edit-id").value === court.id) editCourt(null);
+          await refresh();
+          showStatus(court.name + " was deleted. Saved match results remain in History.");
+        } catch (error) {
+          showStatus(error.message || "Unable to delete the court.");
+          remove.disabled = false;
+        }
+      });
+      actions.append(edit, remove);
+      item.append(details, actions);
       list.append(item);
     });
   }
@@ -258,22 +332,19 @@
     joinForm.hidden = true;
 
     document.getElementById("venue-title").textContent = context.venue.name;
-    const isVenueAdmin = context.role === "admin"
-      && context.venue.createdBy === context.currentUserId;
-    document.getElementById("venue-member-role").textContent = isVenueAdmin
-      ? "Administrator"
-      : "Venue member";
-    document.getElementById("court-config-panel").hidden = !isVenueAdmin;
-    document.getElementById("venue-queue-tools").hidden = !isVenueAdmin;
-    document.getElementById("venue-player-add-tools").hidden = !isVenueAdmin;
+    const lobbyNameInput = document.getElementById("venue-lobby-name");
+    if (document.activeElement !== lobbyNameInput) lobbyNameInput.value = context.venue.name;
+    document.getElementById("court-config-panel").hidden = false;
+    document.getElementById("venue-queue-tools").hidden = false;
+    document.getElementById("venue-player-add-tools").hidden = false;
     renderPlayers();
     renderCourtConfig();
     renderCourts();
 
     const inviteAnchor = document.getElementById("venue-invite-link");
-    if (inviteAnchor && isVenueAdmin && context.venue.joinCode) {
+    if (inviteAnchor && context.venue.joinCode) {
       inviteAnchor.href = inviteUrl();
-      inviteAnchor.textContent = "Share venue invite";
+      inviteAnchor.textContent = "Share queue invite (code " + context.venue.joinCode + ")";
       inviteAnchor.hidden = false;
     } else if (inviteAnchor) {
       inviteAnchor.hidden = true;
@@ -305,19 +376,52 @@
   joinForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = joinForm.querySelector('button[type="submit"]');
+    const query = document.getElementById("venue-join-query").value.trim();
+    const searchResults = document.getElementById("venue-search-results");
     button.disabled = true;
+    searchResults.replaceChildren();
+    searchResults.hidden = true;
     joinStatus.textContent = "";
     try {
-      await rpc("join_court_venue", {
-        p_join_code: document.getElementById("venue-join-code").value
-      });
-      const url = new URL(window.location.href);
-      url.searchParams.delete("join");
-      window.history.replaceState(null, "", url.toString());
-      await refresh();
-      joinStatus.textContent = "Joined the venue.";
+      if (singleCourtQueueContainsUser()) {
+        throw new Error("Remove your account from the Single-Court roster before joining the shared queue.");
+      }
+      if (/^[A-F0-9]{8}$/i.test(query)) {
+        try {
+          await joinVenueAndQueue("join_court_venue", { p_join_code: query });
+          return;
+        } catch (error) {
+          if (!/join code was not found/i.test(error.message || "")) throw error;
+        }
+      }
+
+      const venues = await rpc("search_court_venues", { p_search: query });
+      renderVenueSearchResults(Array.isArray(venues) ? venues : []);
+      joinStatus.textContent = venues && venues.length
+        ? "Select the correct group to join its queue."
+        : "No shared queues matched. Check the name or invite code and try again.";
     } catch (error) {
-      joinStatus.textContent = error.message || "Unable to join this venue.";
+      const message = error.message || "Unable to find or join that queue.";
+      if (context) showStatus(message);
+      else joinStatus.textContent = message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  venueNameForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = venueNameForm.querySelector('button[type="submit"]');
+    button.disabled = true;
+    showStatus("");
+    try {
+      await rpc("rename_court_lobby", {
+        p_name: document.getElementById("venue-lobby-name").value
+      });
+      await refresh();
+      showStatus("Lobby name saved. Share the queue invite so others can join.");
+    } catch (error) {
+      showStatus(error.message || "Unable to update the lobby name.");
     } finally {
       button.disabled = false;
     }
@@ -335,7 +439,7 @@
       await rpc("join_venue_queue");
       localStorage.setItem(modePreferenceKey(), "multicourt");
       await refresh();
-      showStatus("You joined the shared queue. Courts are assigned automatically.");
+      showStatus("You joined the lobby queue. Courts are assigning matches automatically.");
     } catch (error) {
       showStatus(error.message || "Unable to join the shared queue.");
     } finally {
@@ -393,10 +497,11 @@
       }
 
       const playerName = profile
-        ? profile.display_name
+        ? profile.display_name || profile.name || ""
         : window.piqueueApp
           ? window.piqueueApp.sanitizeText(enteredValue, { maxLength: 80, fallback: "" })
           : enteredValue.slice(0, 80);
+      if (!playerName) throw new Error("Enter a player name or select a venue member.");
       const { error } = await window.piqueueSupabase.rpc("add_venue_queue_player", {
         p_profile_id: profile ? profile.id : null,
         p_name: playerName
@@ -404,7 +509,7 @@
       if (error) throw error;
       input.value = "";
       await refresh();
-      showStatus((profile ? profile.display_name : playerName) + " added to the shared queue.");
+      showStatus(playerName + " added to the shared queue.");
     } catch (error) {
       showStatus(error.message || "Unable to add the player.");
     } finally {
@@ -433,12 +538,13 @@
     const params = new URLSearchParams(window.location.search);
     const joinCode = params.get("join");
     if (joinCode && navigator.onLine && localStorage.getItem("piqueueball.offline.v1") !== "true") {
-      await rpc("join_court_venue", { p_join_code: joinCode });
-      localStorage.setItem(modePreferenceKey(), "multicourt");
+      if (singleCourtQueueContainsUser()) {
+        throw new Error("Remove your account from the Single-Court roster before joining the shared queue.");
+      }
       const url = new URL(window.location.href);
       url.searchParams.delete("join");
       window.history.replaceState(null, "", url.toString());
-      window.location.assign("home.html");
+      await joinVenueAndQueue("join_court_venue", { p_join_code: joinCode });
       return;
     }
     await refresh();

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Match Results · PiQueueBall</title>
+  <title>History &amp; Totals · PiQueueBall</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -29,22 +29,25 @@
     <header class="hero queue-hero">
       <span class="circle c1"></span><span class="circle c2"></span>
       <small>PiQueueBall</small>
-      <h1>Match Results</h1>
-      <p>Scores and winners from completed matches.</p>
+      <h1>Match History</h1>
+      <p>Player totals and completed match results.</p>
     </header>
     <div class="account-bar"><span id="account-email"></span><button id="sign-out" type="button">Sign out</button></div>
 
-    <section class="queue-panel tracker-page-panel queue-history-panel" aria-labelledby="queue-history-title">
+    <section class="queue-panel tracker-page-panel" aria-labelledby="stats-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">SAVED QUEUES</p>
-          <h2 id="queue-history-title">Queue snapshots</h2>
+          <p class="eyebrow">PLAYER STATISTICS</p>
+          <h2 id="stats-title">Played, won, and lost</h2>
         </div>
-        <span class="roster-count" id="queue-history-count">0 queues</span>
       </div>
-      <div class="history-pagination" id="queue-history-pagination" aria-label="Queue history pages"></div>
-      <ul class="queue-history-list" id="queue-history-list"></ul>
-      <p class="tracker-empty" id="empty-queue-history">A queue snapshot is saved each time a match starts.</p>
+      <div class="stats-table-wrap">
+        <table class="stats-table">
+          <thead><tr><th scope="col">Player</th><th scope="col">Played</th><th scope="col">Won</th><th scope="col">Lost</th><th scope="col">Actions</th></tr></thead>
+          <tbody id="player-stats"></tbody>
+        </table>
+      </div>
+      <p class="tracker-empty" id="empty-stats">Stats will appear after the first completed match.</p>
     </section>
 
     <section class="queue-panel tracker-page-panel" aria-labelledby="results-title">
@@ -55,7 +58,6 @@
         </div>
         <span class="roster-count" id="results-count">0 matches</span>
       </div>
-      <button class="btn secondary-button" id="export-data" type="button">Export device data</button>
       <p class="queue-status" id="sync-review-message" role="status" aria-live="polite" hidden></p>
       <button class="btn secondary-button" id="claim-offline-sync" type="button" hidden>Sync unassigned offline matches</button>
       <div class="history-pagination" id="results-pagination" aria-label="Match history pages"></div>
@@ -67,8 +69,7 @@
     <nav class="nav" aria-label="Main">
       <a href="home.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Queue</a>
       <a href="score.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v4a4 4 0 0 1-8 0zM8 6H5v2a4 4 0 0 0 4 4m7-6h3v2a4 4 0 0 1-4 4m-3 0v5m-4 3h8m-7-3h6"/></svg>Scores</a>
-      <a href="totals.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11h4v9m4 0V4h4v16m4 0v-6h4v6M2 20h20"/></svg>Totals</a>
-      <a class="active" href="results.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H5V3zm8 1v4h4m-10 4h8m-8 4h5"/></svg>Results</a>
+      <a class="active" href="results.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H5V3zm8 1v4h4m-10 4h8m-8 4h5"/></svg>History</a>
       <a href="profiles.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profiles</a>
       <a href="friends.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7-7.5a4 4 0 0 1 0 7.8M20 15a4 4 0 0 1 2 3.5V21"/></svg>Friends</a>
     </nav>
